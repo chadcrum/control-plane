@@ -15,10 +15,18 @@ import (
 type Config struct {
 	Service  ServiceConfig
 	Database DatabaseConfig
+	Auth     AuthConfig
 	Seed     SeedConfig
 	NATS     NATSConfig
 	SP       SPConfig
 	Wiring   WiringConfig
+}
+
+type AuthConfig struct {
+	Disabled     bool          `envconfig:"AUTH_DISABLED" default:"false"`
+	ProxySecret  string        `envconfig:"AUTH_PROXY_SECRET"`
+	AdminSubject string        `envconfig:"DCM_ADMIN_SUBJECT"`
+	CacheTTL     time.Duration `envconfig:"AUTH_CACHE_TTL" default:"60s"`
 }
 
 type ServiceConfig struct {
@@ -93,6 +101,9 @@ func validate(cfg *Config) error {
 		return err
 	}
 	cfg.Database.Type = dbType
+	if !cfg.Auth.Disabled && cfg.Auth.AdminSubject == "" {
+		return errors.New("DCM_ADMIN_SUBJECT is required when AUTH_DISABLED is not set")
+	}
 	if dbType != "pgsql" {
 		return nil
 	}

@@ -27,7 +27,11 @@ var _ = Describe("Provider API", func() {
 		}
 
 		var err error
-		apiClient, err = providerclient.NewClientWithResponses(baseURL)
+		authEditor := providerclient.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+			req.Header.Set("X-Forwarded-User", "test-admin-sub")
+			return nil
+		})
+		apiClient, err = providerclient.NewClientWithResponses(baseURL, authEditor)
 		Expect(err).NotTo(HaveOccurred())
 
 		ctx = context.Background()

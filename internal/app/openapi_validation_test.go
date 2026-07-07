@@ -5,10 +5,13 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	"github.com/dcm-project/control-plane/internal/auth"
 	"github.com/go-chi/chi/v5"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+var testActorInfo = auth.ActorInfo{ActorID: "test-actor", ActorType: "human"}
 
 var _ = Describe("OpenAPI request validation", func() {
 	var validators *openAPIValidators
@@ -47,6 +50,7 @@ var _ = Describe("OpenAPI request validation", func() {
 
 			body := `{"display_name":"Updated Name","priority":600}`
 			req := httptest.NewRequest(http.MethodPatch, "/api/v1alpha1/policies/test-policy-id", strings.NewReader(body))
+			req = req.WithContext(auth.WithActorInfo(req.Context(), testActorInfo))
 			req.Header.Set("Content-Type", "application/merge-patch+json")
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
@@ -82,6 +86,7 @@ func expectInvalidJSONRejected(validators *openAPIValidators, path string) {
 	})
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("not-json"))
+	req = req.WithContext(auth.WithActorInfo(req.Context(), testActorInfo))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

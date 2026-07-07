@@ -24,6 +24,9 @@ info:
 servers:
   - url: /api/v1alpha1
 
+security:
+  - bearerAuth: []
+
 paths:
   /service-types:
     get:
@@ -573,6 +576,11 @@ paths:
           $ref: '#/components/responses/InternalServerError'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
   parameters:
     ServiceTypeIdPath:
       name: serviceTypeId

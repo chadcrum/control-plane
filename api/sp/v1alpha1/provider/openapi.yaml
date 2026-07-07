@@ -14,6 +14,9 @@ info:
 servers:
   - url: /api/v1alpha1
 
+security:
+  - bearerAuth: []
+
 tags:
   - name: provider
     description: Service Provider management operations
@@ -244,6 +247,11 @@ paths:
                 $ref: '#/components/schemas/Error'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
   parameters:
     ProviderIdPath:
       name: providerId

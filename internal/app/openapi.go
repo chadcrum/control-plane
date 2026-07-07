@@ -1,9 +1,12 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/dcm-project/control-plane/internal/auth"
 
 	catalogapi "github.com/dcm-project/control-plane/api/catalog/v1alpha1"
 	policyapi "github.com/dcm-project/control-plane/api/policy/v1alpha1"
@@ -55,7 +58,7 @@ func newOpenAPIValidators() (*openAPIValidators, error) {
 func oapiRequestValidator(spec *openapi3.T) func(http.Handler) http.Handler {
 	return nethttpmiddleware.OapiRequestValidatorWithOptions(spec, &nethttpmiddleware.Options{
 		Options: openapi3filter.Options{
-			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+			AuthenticationFunc: verifyActorContext,
 			// kin-openapi rewrites validated bodies when schema defaults are applied,
 			// but only registers encoders for application/json. PATCH merge bodies
 			// use application/merge-patch+json and must stay partial (RFC 7396).
@@ -63,6 +66,13 @@ func oapiRequestValidator(spec *openapi3.T) func(http.Handler) http.Handler {
 		},
 		SilenceServersWarning: true,
 	})
+}
+
+func verifyActorContext(ctx context.Context, input *openapi3filter.AuthenticationInput) error {
+	if _, ok := auth.ActorInfoFromContext(ctx); !ok {
+		return fmt.Errorf("unauthenticated: actor context not populated")
+	}
+	return nil
 }
 
 func (v *openAPIValidators) middleware() func(http.Handler) http.Handler {

@@ -55,6 +55,7 @@ services:
       DB_USER: ${POSTGRES_USER:-admin}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-adminpass}
       NATS_URL: "nats://nats:4222"
+      DCM_ADMIN_SUBJECT: "test-admin-sub"
     ports:
       - "8080:8080"
     depends_on:

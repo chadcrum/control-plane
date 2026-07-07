@@ -1,8 +1,8 @@
 //go:build subsystem
-
 package subsystem_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -16,9 +16,9 @@ import (
 )
 
 var (
-	apiClient   *client.ClientWithResponses
-	wireMockURL string
-	httpClient  = &http.Client{Timeout: 10 * time.Second}
+	apiClient      *client.ClientWithResponses
+	wireMockURL    string
+	httpClient     = &http.Client{Timeout: 10 * time.Second}
 )
 
 func TestSubsystem(t *testing.T) {
@@ -36,6 +36,10 @@ var _ = BeforeSuite(func() {
 	apiClient, err = client.NewClientWithResponses(
 		apiURL,
 		client.WithHTTPClient(httpClient),
+		client.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+			req.Header.Set("X-Forwarded-User", "test-admin-sub")
+			return nil
+		}),
 	)
 	Expect(err).NotTo(HaveOccurred())
 

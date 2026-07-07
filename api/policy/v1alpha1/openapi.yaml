@@ -23,6 +23,9 @@ info:
 servers:
   - url: /api/v1alpha1
 
+security:
+  - bearerAuth: []
+
 tags:
   - name: Policies
     description: Operations for managing OPA policies
@@ -290,6 +293,11 @@ paths:
           $ref: '#/components/responses/InternalServerError'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
   parameters:
     PolicyIdPath:
       name: policyId

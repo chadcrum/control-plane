@@ -12,6 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dcm-project/control-plane/internal/auth"
+	authservice "github.com/dcm-project/control-plane/internal/auth/service"
+	authstore "github.com/dcm-project/control-plane/internal/auth/store"
 	catalogserver "github.com/dcm-project/control-plane/internal/catalog/api/server"
 	catalogconfig "github.com/dcm-project/control-plane/internal/catalog/config"
 	cataloghandlers "github.com/dcm-project/control-plane/internal/catalog/handlers/v1alpha1"
@@ -76,6 +79,9 @@ func Run() int {
 	}
 	defer func() { _ = closeDB(db) }()
 
+	authDataStore := authstore.NewStore(db)
+	authSvc := authservice.NewService(authDataStore, cfg.Auth.AdminSubject, logger)
+
 	catalogDataStore := catalogstore.NewStore(db, logger)
 	policyDataStore := policystore.NewStore(db)
 	placementDataStore := placementstore.NewStore(db)
@@ -115,7 +121,15 @@ func Run() int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	if err := catalogSvc.Seed(ctx); err != nil {
+	if err := authSvc.Seed(ctx); err != nil {
+		slog.Error("Failed to seed auth database", "error", err)
+		return 1
+	}
+
+	seedCtx := auth.WithActorInfo(ctx, auth.ActorInfo{
+		ActorType: "system",
+	})
+	if err := catalogSvc.Seed(seedCtx); err != nil {
 		slog.Error("Failed to seed catalog database", "error", err)
 		return 1
 	}
@@ -158,7 +172,20 @@ func Run() int {
 	cleanupScheduler.Start(ctx)
 	defer cleanupScheduler.Stop()
 
-	router, err := newRouter(RouteHandlers{
+	var authMiddleware func(http.Handler) http.Handler
+	if cfg.Auth.Disabled {
+		authMiddleware = auth.DisabledMiddleware(logger)
+	} else {
+		actorCache := auth.NewActorCache(cfg.Auth.CacheTTL)
+		authMiddleware = auth.Middleware(auth.MiddlewareConfig{
+			ProxySecret: cfg.Auth.ProxySecret,
+			Resolver:    authSvc,
+			Cache:       actorCache,
+			Logger:      logger,
+		})
+	}
+
+	router, err := newRouter(authMiddleware, RouteHandlers{
 		Catalog:    cataloghandlers.NewHandler(catalogSvc, logger),
 		Policy:     policyhandlers.NewPolicyHandler(policyService),
 		SPProvider: spproviderhandler.NewHandler(spProviderService),
@@ -208,7 +235,7 @@ type RouteHandlers struct {
 	SPRM       sprmserver.StrictServerInterface
 }
 
-func newRouter(h RouteHandlers) (chi.Router, error) {
+func newRouter(authMW func(http.Handler) http.Handler, h RouteHandlers) (chi.Router, error) {
 	validators, err := newOpenAPIValidators()
 	if err != nil {
 		return nil, err
@@ -217,6 +244,7 @@ func newRouter(h RouteHandlers) (chi.Router, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
+	router.Use(authMW)
 	router.Use(validators.middleware())
 
 	const baseURL = "/api/v1alpha1"
