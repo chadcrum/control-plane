@@ -1,0 +1,4 @@
+injectRequestHeaders:
+  - name: X-Auth-Proxy-Secret
+    values:
+      - fromEnv: AUTH_PROXY_SECRET
