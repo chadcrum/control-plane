@@ -34,7 +34,12 @@ var _ = BeforeSuite(func() {
 
 	// Initialize API client
 	var err error
-	apiClient, err = client.NewClientWithResponses(apiURL)
+	apiClient, err = client.NewClientWithResponses(apiURL,
+		client.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+			req.Header.Set("X-Forwarded-User", "test-admin-sub")
+			return nil
+		}),
+	)
 	Expect(err).NotTo(HaveOccurred(), "Failed to create API client")
 
 	// Verify health endpoint

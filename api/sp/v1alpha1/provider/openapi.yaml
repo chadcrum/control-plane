@@ -14,6 +14,9 @@ info:
 servers:
   - url: /api/v1alpha1
 
+security:
+  - bearerAuth: []
+
 tags:
   - name: provider
     description: Service Provider management operations
@@ -58,6 +61,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         default:
           description: Unexpected error
           content:
@@ -117,6 +124,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '422':
           description: Validation exception
           content:
@@ -152,6 +163,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           description: Provider not found
           content:
@@ -194,6 +209,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           description: Provider not found
           content:
@@ -230,6 +249,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           description: Provider not found
           content:
@@ -256,6 +279,37 @@ components:
         maxLength: 63
       description: Unique identifier of the provider
       example: "123e4567-e89b-12d3-a456-426614174000"
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from the configured Auth Provider
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            type: UNAUTHENTICATED
+            status: 401
+            title: Authentication required
+            detail: Valid authentication credentials are required to access this resource
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            type: PERMISSION_DENIED
+            status: 403
+            title: Access forbidden
+            detail: User does not have permission to access this resource
+
   schemas:
     ProviderMetadata:
       type: object

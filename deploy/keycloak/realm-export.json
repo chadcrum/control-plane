@@ -1,0 +1,79 @@
+{
+  "realm": "dcm",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "dcm-proxy",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "dcm-proxy-secret",
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": ["openid", "profile", "email", "basic"],
+      "protocolMappers": [
+        {
+          "name": "dcm-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "",
+            "included.custom.audience": "dcm-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "dcm-cli",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": false,
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true"
+      },
+      "defaultClientScopes": ["openid", "profile", "email", "basic"],
+      "protocolMappers": [
+        {
+          "name": "dcm-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "",
+            "included.custom.audience": "dcm-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "56deb662-4820-5d83-b828-f4beb11a5fa7",
+      "username": "dcm-admin",
+      "enabled": true,
+      "email": "dcm-admin@example.com",
+      "firstName": "DCM",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "REPLACE_DCM_DEV_PASSWORD",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

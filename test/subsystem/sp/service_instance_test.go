@@ -33,10 +33,18 @@ var _ = Describe("Service Instance API", func() {
 		}
 
 		var err error
-		rmApiClient, err = rmClient.NewClientWithResponses(baseURL)
+		authEditor := rmClient.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+			req.Header.Set("X-Forwarded-User", "test-admin-sub")
+			return nil
+		})
+		rmApiClient, err = rmClient.NewClientWithResponses(baseURL, authEditor)
 		Expect(err).NotTo(HaveOccurred())
 
-		apiClient, err = providerclient.NewClientWithResponses(baseURL)
+		providerAuthEditor := providerclient.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+			req.Header.Set("X-Forwarded-User", "test-admin-sub")
+			return nil
+		})
+		apiClient, err = providerclient.NewClientWithResponses(baseURL, providerAuthEditor)
 		Expect(err).NotTo(HaveOccurred())
 
 		ctx = context.Background()

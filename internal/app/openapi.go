@@ -1,9 +1,14 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/dcm-project/control-plane/internal/auth"
 
 	catalogapi "github.com/dcm-project/control-plane/api/catalog/v1alpha1"
 	policyapi "github.com/dcm-project/control-plane/api/policy/v1alpha1"
@@ -55,14 +60,46 @@ func newOpenAPIValidators() (*openAPIValidators, error) {
 func oapiRequestValidator(spec *openapi3.T) func(http.Handler) http.Handler {
 	return nethttpmiddleware.OapiRequestValidatorWithOptions(spec, &nethttpmiddleware.Options{
 		Options: openapi3filter.Options{
-			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+			AuthenticationFunc: verifyActorContext,
 			// kin-openapi rewrites validated bodies when schema defaults are applied,
 			// but only registers encoders for application/json. PATCH merge bodies
 			// use application/merge-patch+json and must stay partial (RFC 7396).
 			SkipSettingDefaults: true,
 		},
 		SilenceServersWarning: true,
+		ErrorHandler:          oapiErrorHandler,
 	})
+}
+
+func oapiErrorHandler(w http.ResponseWriter, message string, statusCode int) {
+	errType := "INVALID_ARGUMENT"
+	if statusCode == http.StatusUnauthorized {
+		errType = "UNAUTHENTICATED"
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(oapiErrorBody{
+		Type:   errType,
+		Status: statusCode,
+		Title:  http.StatusText(statusCode),
+		Detail: message,
+	}); err != nil {
+		slog.Warn("Failed to write error response", "error", err)
+	}
+}
+
+type oapiErrorBody struct {
+	Type   string `json:"type"`
+	Status int    `json:"status"`
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
+}
+
+func verifyActorContext(ctx context.Context, _ *openapi3filter.AuthenticationInput) error {
+	if _, ok := auth.ActorInfoFromContext(ctx); !ok {
+		return fmt.Errorf("unauthenticated: actor context not populated")
+	}
+	return nil
 }
 
 func (v *openAPIValidators) middleware() func(http.Handler) http.Handler {
@@ -73,7 +110,7 @@ func (v *openAPIValidators) middleware() func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			if path == monolithHealthPath {
+			if path == auth.MonolithHealthPath {
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -519,6 +519,8 @@ type ListInstancesResponse struct {
 	HTTPResponse                  *http.Response
 	JSON200                       *ServiceTypeInstanceList
 	ApplicationproblemJSON400     *Error
+	JSON401                       *Unauthorized
+	JSON403                       *Forbidden
 	ApplicationproblemJSONDefault *Error
 }
 
@@ -551,6 +553,8 @@ type CreateInstanceResponse struct {
 	HTTPResponse                  *http.Response
 	JSON201                       *ServiceTypeInstance
 	ApplicationproblemJSON400     *Error
+	JSON401                       *Unauthorized
+	JSON403                       *Forbidden
 	ApplicationproblemJSON404     *Error
 	ApplicationproblemJSON409     *Error
 	ApplicationproblemJSON422     *Error
@@ -585,6 +589,8 @@ type DeleteInstanceResponse struct {
 	Body                          []byte
 	HTTPResponse                  *http.Response
 	ApplicationproblemJSON400     *Error
+	JSON401                       *Unauthorized
+	JSON403                       *Forbidden
 	ApplicationproblemJSON404     *Error
 	ApplicationproblemJSONDefault *Error
 }
@@ -618,6 +624,8 @@ type GetInstanceResponse struct {
 	HTTPResponse                  *http.Response
 	JSON200                       *ServiceTypeInstance
 	ApplicationproblemJSON400     *Error
+	JSON401                       *Unauthorized
+	JSON403                       *Forbidden
 	ApplicationproblemJSON404     *Error
 	ApplicationproblemJSONDefault *Error
 }
@@ -718,6 +726,20 @@ func ParseListInstancesResponse(rsp *http.Response) (*ListInstancesResponse, err
 		}
 		response.ApplicationproblemJSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -757,6 +779,20 @@ func ParseCreateInstanceResponse(rsp *http.Response) (*CreateInstanceResponse, e
 			return nil, err
 		}
 		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Error
@@ -812,6 +848,20 @@ func ParseDeleteInstanceResponse(rsp *http.Response) (*DeleteInstanceResponse, e
 		}
 		response.ApplicationproblemJSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -858,6 +908,20 @@ func ParseGetInstanceResponse(rsp *http.Response) (*GetInstanceResponse, error) 
 			return nil, err
 		}
 		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Error

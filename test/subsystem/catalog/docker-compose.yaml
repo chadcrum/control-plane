@@ -42,6 +42,8 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
       PLACEMENT_MANAGER_URL: "http://placement-manager:8080"
       NATS_DISABLED: "true"
+      AUTH_DISABLED: "true"
+      DCM_ADMIN_SUBJECT: "test-admin-sub"
     ports:
       - "28080:8080"
     depends_on:

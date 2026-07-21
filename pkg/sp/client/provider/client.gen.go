@@ -522,6 +522,8 @@ type ListProvidersResponse struct {
 	HTTPResponse                  *http.Response
 	JSON200                       *ProviderList
 	ApplicationproblemJSON400     *Error
+	JSON401                       *Unauthorized
+	JSON403                       *Forbidden
 	ApplicationproblemJSONDefault *Error
 }
 
@@ -555,6 +557,8 @@ type CreateProviderResponse struct {
 	JSON200                       *Provider
 	JSON201                       *Provider
 	ApplicationproblemJSON400     *Error
+	JSON401                       *Unauthorized
+	JSON403                       *Forbidden
 	ApplicationproblemJSON409     *Error
 	ApplicationproblemJSON422     *Error
 	ApplicationproblemJSONDefault *Error
@@ -588,6 +592,8 @@ type DeleteProviderResponse struct {
 	Body                          []byte
 	HTTPResponse                  *http.Response
 	ApplicationproblemJSON400     *Error
+	JSON401                       *Unauthorized
+	JSON403                       *Forbidden
 	ApplicationproblemJSON404     *Error
 	ApplicationproblemJSONDefault *Error
 }
@@ -621,6 +627,8 @@ type GetProviderResponse struct {
 	HTTPResponse                  *http.Response
 	JSON200                       *Provider
 	ApplicationproblemJSON400     *Error
+	JSON401                       *Unauthorized
+	JSON403                       *Forbidden
 	ApplicationproblemJSON404     *Error
 	ApplicationproblemJSONDefault *Error
 }
@@ -654,6 +662,8 @@ type ApplyProviderResponse struct {
 	HTTPResponse                  *http.Response
 	JSON200                       *Provider
 	ApplicationproblemJSON400     *Error
+	JSON401                       *Unauthorized
+	JSON403                       *Forbidden
 	ApplicationproblemJSON404     *Error
 	ApplicationproblemJSON409     *Error
 	ApplicationproblemJSONDefault *Error
@@ -772,6 +782,20 @@ func ParseListProvidersResponse(rsp *http.Response) (*ListProvidersResponse, err
 		}
 		response.ApplicationproblemJSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -818,6 +842,20 @@ func ParseCreateProviderResponse(rsp *http.Response) (*CreateProviderResponse, e
 			return nil, err
 		}
 		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest Error
@@ -866,6 +904,20 @@ func ParseDeleteProviderResponse(rsp *http.Response) (*DeleteProviderResponse, e
 		}
 		response.ApplicationproblemJSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -913,6 +965,20 @@ func ParseGetProviderResponse(rsp *http.Response) (*GetProviderResponse, error) 
 		}
 		response.ApplicationproblemJSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -959,6 +1025,20 @@ func ParseApplyProviderResponse(rsp *http.Response) (*ApplyProviderResponse, err
 			return nil, err
 		}
 		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Error

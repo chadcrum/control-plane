@@ -16,6 +16,10 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+const (
+	BearerAuthScopes bearerAuthContextKey = "bearerAuth.Scopes"
+)
+
 // Error RFC 7807 compliant error response
 type Error struct {
 	// Detail Human-readable explanation specific to this occurrence
@@ -113,6 +117,15 @@ type ResourceCapacity struct {
 
 // ProviderIdPath defines model for ProviderIdPath.
 type ProviderIdPath = string
+
+// Forbidden RFC 7807 compliant error response
+type Forbidden = Error
+
+// Unauthorized RFC 7807 compliant error response
+type Unauthorized = Error
+
+// bearerAuthContextKey is the context key for bearerAuth security scheme
+type bearerAuthContextKey string
 
 // ListProvidersParams defines parameters for ListProviders.
 type ListProvidersParams struct {
@@ -319,6 +332,12 @@ func (siw *ServerInterfaceWrapper) ListProviders(w http.ResponseWriter, r *http.
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListProvidersParams
 
@@ -378,6 +397,12 @@ func (siw *ServerInterfaceWrapper) CreateProvider(w http.ResponseWriter, r *http
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateProviderParams
 
@@ -420,6 +445,12 @@ func (siw *ServerInterfaceWrapper) DeleteProvider(w http.ResponseWriter, r *http
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteProvider(w, r, providerId)
 	}))
@@ -446,6 +477,12 @@ func (siw *ServerInterfaceWrapper) GetProvider(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetProvider(w, r, providerId)
 	}))
@@ -471,6 +508,12 @@ func (siw *ServerInterfaceWrapper) ApplyProvider(w http.ResponseWriter, r *http.
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerId", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ApplyProvider(w, r, providerId)
@@ -615,6 +658,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	return r
 }
 
+type ForbiddenJSONResponse Error
+
+type UnauthorizedJSONResponse Error
+
 type ListProvidersRequestObject struct {
 	Params ListProvidersParams
 }
@@ -647,6 +694,34 @@ func (response ListProviders400ApplicationProblemPlusJSONResponse) VisitListProv
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProviders401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListProviders401JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProviders403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListProviders403JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -715,6 +790,34 @@ func (response CreateProvider400ApplicationProblemPlusJSONResponse) VisitCreateP
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProvider401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateProvider401JSONResponse) VisitCreateProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateProvider403JSONResponse) VisitCreateProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -794,6 +897,34 @@ func (response DeleteProvider400ApplicationProblemPlusJSONResponse) VisitDeleteP
 	return err
 }
 
+type DeleteProvider401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteProvider401JSONResponse) VisitDeleteProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteProvider403JSONResponse) VisitDeleteProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteProvider404ApplicationProblemPlusJSONResponse Error
 
 func (response DeleteProvider404ApplicationProblemPlusJSONResponse) VisitDeleteProviderResponse(w http.ResponseWriter) error {
@@ -857,6 +988,34 @@ func (response GetProvider400ApplicationProblemPlusJSONResponse) VisitGetProvide
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProvider401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetProvider401JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetProvider403JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -925,6 +1084,34 @@ func (response ApplyProvider400ApplicationProblemPlusJSONResponse) VisitApplyPro
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyProvider401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ApplyProvider401JSONResponse) VisitApplyProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApplyProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ApplyProvider403JSONResponse) VisitApplyProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }

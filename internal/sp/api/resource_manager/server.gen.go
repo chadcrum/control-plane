@@ -16,6 +16,10 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+const (
+	BearerAuthScopes bearerAuthContextKey = "bearerAuth.Scopes"
+)
+
 // Defines values for ServiceTypeInstanceDeletionStatus.
 const (
 	FAILED          ServiceTypeInstanceDeletionStatus = "FAILED"
@@ -104,6 +108,15 @@ type ServiceTypeInstanceList struct {
 
 // InstanceIdPath defines model for InstanceIdPath.
 type InstanceIdPath = string
+
+// Forbidden RFC 7807 compliant error response
+type Forbidden = Error
+
+// Unauthorized RFC 7807 compliant error response
+type Unauthorized = Error
+
+// bearerAuthContextKey is the context key for bearerAuth security scheme
+type bearerAuthContextKey string
 
 // ListInstancesParams defines parameters for ListInstances.
 type ListInstancesParams struct {
@@ -206,6 +219,12 @@ func (siw *ServerInterfaceWrapper) ListInstances(w http.ResponseWriter, r *http.
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListInstancesParams
 
@@ -291,6 +310,12 @@ func (siw *ServerInterfaceWrapper) CreateInstance(w http.ResponseWriter, r *http
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateInstanceParams
 
@@ -333,6 +358,12 @@ func (siw *ServerInterfaceWrapper) DeleteInstance(w http.ResponseWriter, r *http
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params DeleteInstanceParams
 
@@ -374,6 +405,12 @@ func (siw *ServerInterfaceWrapper) GetInstance(w http.ResponseWriter, r *http.Re
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "instanceId", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetInstanceParams
@@ -531,6 +568,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	return r
 }
 
+type ForbiddenJSONResponse Error
+
+type UnauthorizedJSONResponse Error
+
 type ListInstancesRequestObject struct {
 	Params ListInstancesParams
 }
@@ -563,6 +604,34 @@ func (response ListInstances400ApplicationProblemPlusJSONResponse) VisitListInst
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListInstances401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListInstances401JSONResponse) VisitListInstancesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListInstances403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListInstances403JSONResponse) VisitListInstancesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -617,6 +686,34 @@ func (response CreateInstance400ApplicationProblemPlusJSONResponse) VisitCreateI
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInstance401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateInstance401JSONResponse) VisitCreateInstanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInstance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateInstance403JSONResponse) VisitCreateInstanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -711,6 +808,34 @@ func (response DeleteInstance400ApplicationProblemPlusJSONResponse) VisitDeleteI
 	return err
 }
 
+type DeleteInstance401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteInstance401JSONResponse) VisitDeleteInstanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteInstance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteInstance403JSONResponse) VisitDeleteInstanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteInstance404ApplicationProblemPlusJSONResponse Error
 
 func (response DeleteInstance404ApplicationProblemPlusJSONResponse) VisitDeleteInstanceResponse(w http.ResponseWriter) error {
@@ -775,6 +900,34 @@ func (response GetInstance400ApplicationProblemPlusJSONResponse) VisitGetInstanc
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetInstance401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetInstance401JSONResponse) VisitGetInstanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetInstance403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetInstance403JSONResponse) VisitGetInstanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }

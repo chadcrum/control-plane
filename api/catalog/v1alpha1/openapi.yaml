@@ -24,6 +24,9 @@ info:
 servers:
   - url: /api/v1alpha1
 
+security:
+  - bearerAuth: []
+
 paths:
   /service-types:
     get:
@@ -1171,6 +1174,13 @@ components:
             Unique identifier for this specific error occurrence.
             Can be used for tracking and debugging.
           example: 7934df3e-4b63-429b-b0f5-b8d350ec165e
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from the configured Auth Provider
 
   responses:
     BadRequest:

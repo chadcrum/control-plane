@@ -1,14 +1,18 @@
 package app
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 
+	"github.com/dcm-project/control-plane/internal/auth"
 	"github.com/go-chi/chi/v5"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+var testActorInfo = auth.ActorInfo{ActorID: "test-actor", ActorType: "human"}
 
 var _ = Describe("OpenAPI request validation", func() {
 	var validators *openAPIValidators
@@ -25,7 +29,7 @@ var _ = Describe("OpenAPI request validation", func() {
 			router.Use(validators.middleware())
 			registerMonolithHealth(router)
 
-			req := httptest.NewRequest(http.MethodGet, monolithHealthPath, nil)
+			req := httptest.NewRequest(http.MethodGet, auth.MonolithHealthPath, nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
@@ -47,6 +51,7 @@ var _ = Describe("OpenAPI request validation", func() {
 
 			body := `{"display_name":"Updated Name","priority":600}`
 			req := httptest.NewRequest(http.MethodPatch, "/api/v1alpha1/policies/test-policy-id", strings.NewReader(body))
+			req = req.WithContext(auth.WithActorInfo(req.Context(), testActorInfo))
 			req.Header.Set("Content-Type", "application/merge-patch+json")
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
@@ -82,9 +87,20 @@ func expectInvalidJSONRejected(validators *openAPIValidators, path string) {
 	})
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("not-json"))
+	req = req.WithContext(auth.WithActorInfo(req.Context(), testActorInfo))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
 	Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
+	Expect(rec.Header().Get("Content-Type")).To(Equal("application/problem+json"))
+
+	var body map[string]any
+	Expect(json.Unmarshal(rec.Body.Bytes(), &body)).To(Succeed())
+	Expect(body).To(HaveKey("type"))
+	Expect(body).To(HaveKey("status"))
+	Expect(body).To(HaveKey("title"))
+	Expect(body).To(HaveKey("detail"))
+	Expect(body["type"]).To(Equal("INVALID_ARGUMENT"))
+	Expect(body["status"]).To(BeEquivalentTo(http.StatusBadRequest))
 }

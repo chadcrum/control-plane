@@ -156,6 +156,12 @@ func (siw *ServerInterfaceWrapper) ListCatalogItemInstances(w http.ResponseWrite
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListCatalogItemInstancesParams
 
@@ -215,6 +221,12 @@ func (siw *ServerInterfaceWrapper) CreateCatalogItemInstance(w http.ResponseWrit
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateCatalogItemInstanceParams
 
@@ -257,6 +269,12 @@ func (siw *ServerInterfaceWrapper) DeleteCatalogItemInstance(w http.ResponseWrit
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteCatalogItemInstance(w, r, catalogItemInstanceId)
 	}))
@@ -282,6 +300,12 @@ func (siw *ServerInterfaceWrapper) GetCatalogItemInstance(w http.ResponseWriter,
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalogItemInstanceId", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCatalogItemInstance(w, r, catalogItemInstanceId)
@@ -309,6 +333,12 @@ func (siw *ServerInterfaceWrapper) RehydrateCatalogItemInstance(w http.ResponseW
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RehydrateCatalogItemInstance(w, r, catalogItemInstanceId)
 	}))
@@ -325,6 +355,12 @@ func (siw *ServerInterfaceWrapper) ListCatalogItems(w http.ResponseWriter, r *ht
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListCatalogItemsParams
@@ -385,6 +421,12 @@ func (siw *ServerInterfaceWrapper) CreateCatalogItem(w http.ResponseWriter, r *h
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateCatalogItemParams
 
@@ -427,6 +469,12 @@ func (siw *ServerInterfaceWrapper) DeleteCatalogItem(w http.ResponseWriter, r *h
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteCatalogItem(w, r, catalogItemId)
 	}))
@@ -452,6 +500,12 @@ func (siw *ServerInterfaceWrapper) GetCatalogItem(w http.ResponseWriter, r *http
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "catalogItemId", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCatalogItem(w, r, catalogItemId)
@@ -479,6 +533,12 @@ func (siw *ServerInterfaceWrapper) UpdateCatalogItem(w http.ResponseWriter, r *h
 		return
 	}
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCatalogItem(w, r, catalogItemId)
 	}))
@@ -495,6 +555,12 @@ func (siw *ServerInterfaceWrapper) ListServiceTypes(w http.ResponseWriter, r *ht
 
 	var err error
 	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListServiceTypesParams
@@ -542,6 +608,12 @@ func (siw *ServerInterfaceWrapper) CreateServiceType(w http.ResponseWriter, r *h
 	var err error
 	_ = err
 
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CreateServiceTypeParams
 
@@ -583,6 +655,12 @@ func (siw *ServerInterfaceWrapper) GetServiceType(w http.ResponseWriter, r *http
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "serviceTypeId", Err: err})
 		return
 	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetServiceType(w, r, serviceTypeId)

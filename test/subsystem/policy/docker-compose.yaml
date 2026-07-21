@@ -35,6 +35,8 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
       LOG_LEVEL: debug
       NATS_DISABLED: "true"
+      AUTH_DISABLED: "true"
+      DCM_ADMIN_SUBJECT: "test-admin-sub"
     ports:
       - "8080:8080"
     healthcheck:

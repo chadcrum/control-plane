@@ -36,7 +36,7 @@ Run the monolith (pick one):
 |---------|---------------|----------|------------|
 | `make run` | host | SQLite at `/tmp/control-plane.db` | NATS disabled |
 | `make run-dev` | host | Postgres (`DB_*` defaults) | Postgres + NATS running locally |
-| `make compose-up` | containers | Postgres in compose | also starts NATS, control-plane, and dcm-ui |
+| `make compose-up` | containers | Postgres in compose | also starts NATS, Keycloak, control-plane, and dcm-ui |
 
 ```bash
 make run              # SQLite, no containers
@@ -76,13 +76,22 @@ in shared-workflows for tag behavior and version conventions.
 
 Full-stack Compose and Helm packaging live under `deploy/`:
 
-- **Compose:** control-plane, postgres, nats, dcm-ui, and optional service providers
-- **Helm:** Kubernetes/OpenShift chart at `deploy/helm/dcm`
+- **Compose:** control-plane, postgres, nats, keycloak, dcm-ui, and optional service providers
+- **Helm:** Kubernetes/OpenShift chart at `deploy/helm/dcm` (authentication is not yet integrated into the Helm chart — Keycloak is only available in the Compose stack)
 
-See [deploy/RUN.md](deploy/RUN.md) for local stack usage and service provider profiles.
+See [deploy/RUN.md](deploy/RUN.md) for local stack usage, authentication, and service provider profiles.
 See [deploy/helm/dcm/README.md](deploy/helm/dcm/README.md) for cluster installs.
 
-The control-plane API is exposed on `:8080`.
+Authentication is disabled by default (`AUTH_DISABLED=true`) until end-to-end
+authentication is fully implemented. Service providers do not yet forward
+authentication headers, so enabling auth will break SP communication with the
+control plane.
+
+| Port | Service | Notes |
+|---|---|---|
+| `:8080` | control-plane API | Direct access; validates JWT bearer tokens when auth enabled |
+| `:8180` | Keycloak | Identity provider (OIDC issuer) |
+| `:7007` | dcm-ui | Web UI |
 
 ### Image versions
 

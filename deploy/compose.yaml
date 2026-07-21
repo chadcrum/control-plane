@@ -17,6 +17,29 @@ x-db-common: &db-common
 x-dcm-registration-url: &dcm-registration-url "http://control-plane:8080/api/v1alpha1"
 
 services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "mkdir -p /opt/keycloak/data/import && content=$$(cat /opt/keycloak/data/realm-template.json) && printf '%s' \"$${content//REPLACE_DCM_DEV_PASSWORD/$$DCM_DEV_USER_PASSWORD}\" > /opt/keycloak/data/import/realm-export.json && exec /opt/keycloak/bin/kc.sh start-dev --import-realm"
+    environment:
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: "http://keycloak:8080"
+      KC_HOSTNAME_STRICT: "false"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      DCM_DEV_USER_PASSWORD: ${DCM_DEV_USER_PASSWORD:-admin}
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/realm-template.json:ro,z
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
   postgres:
     image: docker.io/library/postgres:16-alpine
     environment:
@@ -54,6 +77,11 @@ services:
       DB_NAME: control-plane
       LOG_LEVEL: info
       NATS_URL: "nats://nats:4222"
+      DCM_ADMIN_SUBJECT: ${DCM_ADMIN_SUBJECT:-56deb662-4820-5d83-b828-f4beb11a5fa7}
+      AUTH_DISABLED: ${AUTH_DISABLED:-true}
+      AUTH_PROXY_SECRET: ${AUTH_PROXY_SECRET:-dcm-dev-proxy-secret}
+      AUTH_ISSUER_URL: ${AUTH_ISSUER_URL:-}
+      AUTH_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE:-}
     ports:
       - "8080:8080"
     depends_on:
@@ -61,6 +89,8 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
+      keycloak:
+        condition: service_healthy
 
   kubevirt-service-provider:
     container_name: ${KUBEVIRT_PROVIDER_NAME:-kubevirt-service-provider}

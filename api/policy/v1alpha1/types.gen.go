@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+const (
+	BearerAuthScopes bearerAuthContextKey = "bearerAuth.Scopes"
+)
+
 // Defines values for ErrorType.
 const (
 	ABORTED            ErrorType = "ABORTED"
@@ -249,6 +253,9 @@ type Unauthorized = Error
 //
 // Provides structured error information for API failures.
 type ValidationError = Error
+
+// bearerAuthContextKey is the context key for bearerAuth security scheme
+type bearerAuthContextKey string
 
 // ListPoliciesParams defines parameters for ListPolicies.
 type ListPoliciesParams struct {

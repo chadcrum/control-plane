@@ -12,6 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dcm-project/control-plane/internal/auth"
+	authservice "github.com/dcm-project/control-plane/internal/auth/service"
+	authstore "github.com/dcm-project/control-plane/internal/auth/store"
 	catalogserver "github.com/dcm-project/control-plane/internal/catalog/api/server"
 	catalogconfig "github.com/dcm-project/control-plane/internal/catalog/config"
 	cataloghandlers "github.com/dcm-project/control-plane/internal/catalog/handlers/v1alpha1"
@@ -76,6 +79,9 @@ func Run() int {
 	}
 	defer func() { _ = closeDB(db) }()
 
+	authDataStore := authstore.NewStore(db)
+	authSvc := authservice.NewService(authDataStore, cfg.Auth.AdminSubject, logger)
+
 	catalogDataStore := catalogstore.NewStore(db, logger)
 	policyDataStore := policystore.NewStore(db)
 	placementDataStore := placementstore.NewStore(db)
@@ -115,7 +121,15 @@ func Run() int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	if err := catalogSvc.Seed(ctx); err != nil {
+	if err := authSvc.Seed(ctx); err != nil {
+		slog.Error("Failed to seed auth database", "error", err)
+		return 1
+	}
+
+	seedCtx := auth.WithActorInfo(ctx, auth.ActorInfo{
+		ActorType: "system",
+	})
+	if err := catalogSvc.Seed(seedCtx); err != nil {
 		slog.Error("Failed to seed catalog database", "error", err)
 		return 1
 	}
@@ -158,7 +172,37 @@ func Run() int {
 	cleanupScheduler.Start(ctx)
 	defer cleanupScheduler.Stop()
 
-	router, err := newRouter(RouteHandlers{
+	var authMiddleware func(http.Handler) http.Handler
+	if cfg.Auth.Disabled {
+		authMiddleware = auth.DisabledMiddleware(logger)
+	} else {
+		if cfg.Auth.ProxySecret == "" && cfg.Auth.IssuerURL == "" {
+			slog.Error("AUTH_PROXY_SECRET or AUTH_ISSUER_URL is required when authentication is enabled")
+			return 1
+		}
+		actorCache := auth.NewActorCache(cfg.Auth.CacheTTL)
+		mwCfg := auth.MiddlewareConfig{
+			ProxySecret: cfg.Auth.ProxySecret,
+			Resolver:    authSvc,
+			Cache:       actorCache,
+			Logger:      logger,
+		}
+		if cfg.Auth.IssuerURL != "" {
+			jwtValidator, err := auth.NewOIDCValidator(ctx, cfg.Auth.IssuerURL, cfg.Auth.Audience)
+			if err != nil {
+				slog.Error("Failed to initialize OIDC JWT validator", "error", err, "issuer", cfg.Auth.IssuerURL)
+				return 1
+			}
+			mwCfg.JWTValidator = jwtValidator
+			if cfg.Auth.Audience == "" {
+				slog.Warn("AUTH_JWT_AUDIENCE is empty - audience validation is disabled, tokens from any client in this issuer realm will be accepted", "issuer", cfg.Auth.IssuerURL, "component", "auth")
+			}
+			slog.Info("JWT bearer validation enabled", "issuer", cfg.Auth.IssuerURL, "component", "auth")
+		}
+		authMiddleware = auth.Middleware(mwCfg)
+	}
+
+	router, err := newRouter(authMiddleware, RouteHandlers{
 		Catalog:    cataloghandlers.NewHandler(catalogSvc, logger),
 		Policy:     policyhandlers.NewPolicyHandler(policyService),
 		SPProvider: spproviderhandler.NewHandler(spProviderService),
@@ -208,7 +252,7 @@ type RouteHandlers struct {
 	SPRM       sprmserver.StrictServerInterface
 }
 
-func newRouter(h RouteHandlers) (chi.Router, error) {
+func newRouter(authMW func(http.Handler) http.Handler, h RouteHandlers) (chi.Router, error) {
 	validators, err := newOpenAPIValidators()
 	if err != nil {
 		return nil, err
@@ -217,6 +261,7 @@ func newRouter(h RouteHandlers) (chi.Router, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
+	router.Use(authMW)
 	router.Use(validators.middleware())
 
 	const baseURL = "/api/v1alpha1"

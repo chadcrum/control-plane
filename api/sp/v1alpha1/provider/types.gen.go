@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+const (
+	BearerAuthScopes bearerAuthContextKey = "bearerAuth.Scopes"
+)
+
 // Error RFC 7807 compliant error response
 type Error struct {
 	// Detail Human-readable explanation specific to this occurrence
@@ -106,6 +110,15 @@ type ResourceCapacity struct {
 
 // ProviderIdPath defines model for ProviderIdPath.
 type ProviderIdPath = string
+
+// Forbidden RFC 7807 compliant error response
+type Forbidden = Error
+
+// Unauthorized RFC 7807 compliant error response
+type Unauthorized = Error
+
+// bearerAuthContextKey is the context key for bearerAuth security scheme
+type bearerAuthContextKey string
 
 // ListProvidersParams defines parameters for ListProviders.
 type ListProvidersParams struct {

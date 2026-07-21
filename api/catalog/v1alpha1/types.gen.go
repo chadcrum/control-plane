@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+const (
+	BearerAuthScopes bearerAuthContextKey = "bearerAuth.Scopes"
+)
+
 // Defines values for ErrorType.
 const (
 	ABORTED            ErrorType = "ABORTED"
@@ -381,6 +385,9 @@ type ProviderError = Error
 // Unauthorized Error response following RFC 7807 Problem Details for HTTP APIs
 // and AEP-193 Error Responses specification.
 type Unauthorized = Error
+
+// bearerAuthContextKey is the context key for bearerAuth security scheme
+type bearerAuthContextKey string
 
 // ListCatalogItemInstancesParams defines parameters for ListCatalogItemInstances.
 type ListCatalogItemInstancesParams struct {

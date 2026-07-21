@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+const (
+	BearerAuthScopes bearerAuthContextKey = "bearerAuth.Scopes"
+)
+
 // Defines values for ServiceTypeInstanceDeletionStatus.
 const (
 	FAILED          ServiceTypeInstanceDeletionStatus = "FAILED"
@@ -95,6 +99,15 @@ type ServiceTypeInstanceList struct {
 
 // InstanceIdPath defines model for InstanceIdPath.
 type InstanceIdPath = string
+
+// Forbidden RFC 7807 compliant error response
+type Forbidden = Error
+
+// Unauthorized RFC 7807 compliant error response
+type Unauthorized = Error
+
+// bearerAuthContextKey is the context key for bearerAuth security scheme
+type bearerAuthContextKey string
 
 // ListInstancesParams defines parameters for ListInstances.
 type ListInstancesParams struct {

@@ -3,6 +3,7 @@
 package subsystem_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -36,6 +37,10 @@ var _ = BeforeSuite(func() {
 	apiClient, err = client.NewClientWithResponses(
 		apiURL,
 		client.WithHTTPClient(httpClient),
+		client.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+			req.Header.Set("X-Forwarded-User", "test-admin-sub")
+			return nil
+		}),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
