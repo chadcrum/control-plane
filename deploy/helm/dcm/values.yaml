@@ -20,11 +20,12 @@ controlPlane:
   tag: ""  # defaults to global.imageTag
   securityContext:
     runAsNonRoot: true
-    runAsUser: 1001
     allowPrivilegeEscalation: false
     capabilities:
       drop:
         - ALL
+    seccompProfile:
+      type: RuntimeDefault
   route:
     enabled: true
     host: ""  # leave empty for auto-generated OpenShift hostname

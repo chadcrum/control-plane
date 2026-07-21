@@ -56,4 +56,12 @@ Usage: {{ include "dcm.waitForPostgres" . | nindent 8 }}
 - name: wait-for-postgres
   image: {{ .Values.postgres.image }}
   command: ["sh", "-c", "until pg_isready -h {{ include "dcm.fullname" . }}-postgres -p 5432 -U {{ .Values.postgres.user }}; do echo 'Waiting for postgres...'; sleep 2; done"]
+  securityContext:
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
 {{- end }}
