@@ -51,10 +51,26 @@ func (s *Service) ResolveActor(ctx context.Context, externalID string) (*auth.Ac
 	}, nil
 }
 
+const serviceAccountPrefix = "service-account-"
+
+// inferActorType classifies an actor using Keycloak's convention of
+// prefixing service account usernames with "service-account-". This is a
+// heuristic, not a verified claim: a human username that happens to start
+// with this prefix is misclassified as a service account, and non-Keycloak
+// identity providers without this convention are misclassified as human.
+func inferActorType(preferredUsername string) string {
+	if strings.HasPrefix(preferredUsername, serviceAccountPrefix) {
+		return model.ActorTypeServiceAccount
+	}
+	return model.ActorTypeHuman
+}
+
 var errProvisionRace = errors.New("provision race")
 
 func (s *Service) provisionActor(ctx context.Context, externalID string) (*auth.ActorInfo, error) {
-	username := auth.PreferredUsernameFromContext(ctx)
+	preferredUsername := auth.PreferredUsernameFromContext(ctx)
+	actorType := inferActorType(preferredUsername)
+	username := preferredUsername
 	if username == "" {
 		username = externalID
 	}
@@ -64,7 +80,7 @@ func (s *Service) provisionActor(ctx context.Context, externalID string) (*auth.
 		actor, err := txStore.CreateActor(ctx, model.Actor{
 			ID:       uuid.New().String(),
 			Username: username,
-			Type:     model.ActorTypeHuman,
+			Type:     actorType,
 			Status:   model.ActorStatusActive,
 		})
 		if err != nil {
@@ -104,10 +120,10 @@ func (s *Service) provisionActor(ctx context.Context, externalID string) (*auth.
 		return nil, fmt.Errorf("provision actor: %w", err)
 	}
 
-	s.logger.Info("Provisioned new actor on first login", "actorId", actorID)
+	s.logger.Info("Provisioned new actor on first login", "actorId", actorID, "actorType", actorType)
 	return &auth.ActorInfo{
 		ActorID:   actorID,
-		ActorType: model.ActorTypeHuman,
+		ActorType: actorType,
 	}, nil
 }
 

@@ -589,3 +589,55 @@ func TestSeed_PropagatesCreateIdentityError(t *testing.T) {
 		t.Fatalf("err should wrap createErr, got: %v", err)
 	}
 }
+
+func TestResolveActor_JITProvisionServiceAccount(t *testing.T) {
+	s := NewService(&mockStore{
+		findActorByExternalIDFn: func(_ context.Context, _, _ string) (*model.Actor, error) {
+			return nil, store.ErrIdentityNotFound
+		},
+		createActorFn: func(_ context.Context, actor model.Actor) (*model.Actor, error) {
+			if actor.Type != model.ActorTypeServiceAccount {
+				t.Errorf("actor type = %q, want %q", actor.Type, model.ActorTypeServiceAccount)
+			}
+			if actor.Username != "service-account-dcm-proxy" {
+				t.Errorf("actor username = %q, want %q", actor.Username, "service-account-dcm-proxy")
+			}
+			return &actor, nil
+		},
+		createActorIdentityFn: func(_ context.Context, identity model.ActorIdentity) (*model.ActorIdentity, error) {
+			return &identity, nil
+		},
+	}, "", slog.Default())
+
+	ctx := auth.WithPreferredUsername(context.Background(), "service-account-dcm-proxy")
+	info, err := s.ResolveActor(ctx, "ext-svc-uuid")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.ActorType != model.ActorTypeServiceAccount {
+		t.Fatalf("ActorType = %q, want %q", info.ActorType, model.ActorTypeServiceAccount)
+	}
+}
+
+func TestInferActorType(t *testing.T) {
+	tests := []struct {
+		username string
+		want     string
+	}{
+		{"service-account-dcm-proxy", model.ActorTypeServiceAccount},
+		{"service-account-", model.ActorTypeServiceAccount},
+		{"service-account-x", model.ActorTypeServiceAccount},
+		{"alice", model.ActorTypeHuman},
+		{"", model.ActorTypeHuman},
+		{"SERVICE-ACCOUNT-foo", model.ActorTypeHuman},
+		{"svc-account-foo", model.ActorTypeHuman},
+		{"service-account", model.ActorTypeHuman},
+	}
+	for _, tt := range tests {
+		t.Run(tt.username, func(t *testing.T) {
+			if got := inferActorType(tt.username); got != tt.want {
+				t.Errorf("inferActorType(%q) = %q, want %q", tt.username, got, tt.want)
+			}
+		})
+	}
+}
