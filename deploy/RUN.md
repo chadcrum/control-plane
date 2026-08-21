@@ -17,8 +17,8 @@ make compose-up
 
 The control-plane API is at `http://localhost:8080`. DCM UI is at `http://localhost:7007`.
 
-Authentication is **disabled by default** (`AUTH_DISABLED=true`) because end-to-end
-auth is not fully implemented. See [Authentication](#authentication) for details.
+Authentication is **disabled by default** (`AUTH_DISABLED=true`). See
+[Authentication](#authentication) for enabling it and current limitations.
 
 ## CLI configuration
 
@@ -27,9 +27,9 @@ The [DCM CLI](https://github.com/dcm-project/cli) uses the same control-plane UR
 or the `DCM_CONTROL_PLANE_URL` environment variable. See the [CLI README](https://github.com/dcm-project/cli/blob/main/README.md)
 for install and usage.
 
-> **Limitation:** The CLI does not support authentication yet. A `dcm login` command
-> using OIDC device authorization flow (against the `dcm-cli` Keycloak client) is
-> planned but not implemented. For now, the CLI only works with `AUTH_DISABLED=true`.
+The CLI forwards bearer tokens to the control-plane API. Run `dcm login` for interactive
+OIDC device authorization (Keycloak `dcm-cli` client), or set `DCM_TOKEN` / `--token`
+for CI and scripting.
 
 ## Running with service providers
 
@@ -145,20 +145,22 @@ provider. The control-plane validates JWT bearer tokens directly against Keycloa
 JWKS endpoint using OIDC discovery (no external auth proxy required). A proxy-header
 fallback path (`X-Auth-Proxy-Secret` + `X-Forwarded-User`) is also supported.
 
-Authentication is disabled by default (`AUTH_DISABLED=true`) because end-to-end
-authentication is not fully implemented — the CLI and service providers do not
-forward authentication headers yet, so enabling it will break most workflows.
+Authentication is disabled by default (`AUTH_DISABLED=true`). When enabled, the CLI
+(`dcm login` / bearer token) and direct JWT API calls work; service providers do not
+forward authentication headers yet, so SP ↔ control-plane traffic may fail.
 
-To enable authentication (Compose only):
+To enable authentication (Compose):
 
 ```bash
 AUTH_DISABLED=false AUTH_ISSUER_URL=http://keycloak:8080/realms/dcm make compose-up
 ```
 
-> **Warning:** Enabling authentication is only supported in the Compose stack. The
-> CLI and service providers do not forward authentication headers yet, so only
-> direct API calls with a valid Keycloak JWT bearer token will work. Enabling auth
-> outside Compose is not supported — the binary defaults to auth disabled.
+For Helm chart installs, see [helm/dcm/README.md](helm/dcm/README.md#authentication)
+(`auth.enabled=true`).
+
+> **Warning:** Service providers do not forward authentication headers yet, so enabling
+> auth can break SP workflows. The CLI (`dcm login` / bearer token) and direct API
+> calls with a valid Keycloak JWT work.
 
 When enabled, the control-plane authenticates requests via two paths (tried in order):
 
@@ -234,7 +236,7 @@ the compose network (see [k8s-container-sp-kind.md](docs/k8s-container-sp-kind.m
 
 | Variable                                   | Default                     | Description                                                                                                 |
 | ------------------------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `AUTH_DISABLED`                             | `true`                      | Disable authentication (default `true` — e2e auth not fully implemented)                                    |
+| `AUTH_DISABLED`                             | `true`                      | Disable authentication (default `true`; see [Authentication](#authentication))                              |
 | `AUTH_ISSUER_URL`                           | _(empty)_                   | OIDC issuer URL for JWT validation (e.g. `http://keycloak:8080/realms/dcm`). Empty = JWT path disabled.     |
 | `AUTH_JWT_AUDIENCE`                         | _(empty)_                   | Expected `aud` claim in JWT tokens. Empty = audience check skipped.                                         |
 | `AUTH_PROXY_SECRET`                         | `dcm-dev-proxy-secret`      | Shared secret for proxy-header fallback auth path                                                           |

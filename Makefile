@@ -26,6 +26,7 @@ export COMPOSE_PROJECT_NAME
 CONTAINER_IMAGE_NAME ?= quay.io/dcm-project/$(BINARY_NAME)
 CONTAINER_IMAGE_TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
+include make/helm.mk
 include make/auth.mk
 include make/catalog.mk
 include make/placement.mk
@@ -112,4 +113,5 @@ tidy:
 	go mod tidy
 
 .PHONY: build run run-dev compose-up compose-up-with-providers compose-down image-build \
-	clean fmt vet lint test test-catalog test-placement test-policy test-sp tidy
+	clean fmt vet lint test test-catalog test-placement test-policy test-sp tidy \
+	helm-chart-sync helm-chart-verify-sync helm-chart-verify-admin-subject helm-chart-verify helm-chart-lint helm-chart-template helm-chart-check

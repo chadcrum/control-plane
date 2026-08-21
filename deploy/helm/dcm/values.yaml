@@ -36,6 +36,41 @@ controlPlane:
     tls: []
     annotations: {}
 
+# -- Authentication (mirrors compose: Keycloak + control-plane JWT/proxy-header auth)
+# Disabled by default. When enabled, deploys Keycloak and sets AUTH_* on the control-plane.
+# Route/Ingress stay on the control-plane; clients send Authorization: Bearer tokens.
+# Defaults are for local/lab only — use authSecretRef or override inline values on shared clusters.
+auth:
+  enabled: false
+  adminSubject: "56deb662-4820-5d83-b828-f4beb11a5fa7"  # synced with realm-export.json; CI verifies via helm-chart-verify-admin-subject
+  proxySecret: "dcm-dev-proxy-secret"
+  authSecretRef: ""  # name of a pre-existing Secret in the release namespace (see README); when set, inline defaults are ignored
+  jwtAudience: "dcm-api"  # empty = skip audience check
+  issuerURL: ""    # empty = http://<fullname>-keycloak:8080/realms/dcm; also drives KC_HOSTNAME
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    adminUser: admin
+    adminPassword: admin
+    # Prefer simple passwords; shell substitution in the Keycloak entrypoint is fragile with special chars
+    devUserPassword: admin
+    securityContext:
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    route:
+      enabled: false
+      host: ""  # leave empty for auto-generated OpenShift hostname
+    ingress:
+      enabled: false
+      className: ""
+      host: ""
+      tls: []
+      annotations: {}
+
 # -- DCM UI
 dcmUi:
   enabled: true

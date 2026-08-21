@@ -1,0 +1,26 @@
+name: Helm chart
+
+on:
+  push:
+    branches: [main, 'release/v*']
+    paths:
+      - 'deploy/helm/**'
+      - 'deploy/keycloak/realm-export.json'
+      - 'make/helm.mk'
+      - '.github/workflows/helm.yaml'
+  pull_request:
+    branches: [main, 'release/v*']
+    paths:
+      - 'deploy/helm/**'
+      - 'deploy/keycloak/realm-export.json'
+      - 'make/helm.mk'
+      - '.github/workflows/helm.yaml'
+
+jobs:
+  helm-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Sync and validate Helm chart
+        run: make helm-chart-check

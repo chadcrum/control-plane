@@ -14,9 +14,19 @@ spec:
     metadata:
       labels:
         {{- include "dcm.selectorLabels" (dict "context" . "component" "control-plane") | nindent 8 }}
+      {{- if .Values.auth.enabled }}
+      annotations:
+        {{- if not .Values.auth.authSecretRef }}
+        checksum/auth-secret: {{ include (print $.Template.BasePath "/secret-auth.yaml") . | sha256sum }}
+        {{- end }}
+        checksum/realm: {{ required "auth.enabled=true requires deploy/helm/dcm/files/realm-export.json. Run: make helm-chart-sync" (.Files.Get "files/realm-export.json") | sha256sum }}
+      {{- end }}
     spec:
       initContainers:
         {{- include "dcm.waitForPostgres" . | nindent 8 }}
+        {{- if .Values.auth.enabled }}
+        {{- include "dcm.waitForKeycloak" . | nindent 8 }}
+        {{- end }}
       containers:
         - name: control-plane
           image: "{{ .Values.controlPlane.image }}:{{ include "dcm.imageTag" (dict "tag" .Values.controlPlane.tag "global" .Values.global) }}"
@@ -43,6 +53,23 @@ spec:
               value: info
             - name: NATS_URL
               value: "nats://{{ include "dcm.fullname" . }}-nats:4222"
+            - name: AUTH_DISABLED
+              value: {{ if .Values.auth.enabled }}"false"{{ else }}"true"{{ end }}
+            {{- if .Values.auth.enabled }}
+            - name: DCM_ADMIN_SUBJECT
+              value: {{ .Values.auth.adminSubject | quote }}
+            - name: AUTH_PROXY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dcm.authSecretName" . }}
+                  key: AUTH_PROXY_SECRET
+            - name: AUTH_ISSUER_URL
+              value: {{ include "dcm.authIssuerURL" . | quote }}
+            {{- if .Values.auth.jwtAudience }}
+            - name: AUTH_JWT_AUDIENCE
+              value: {{ .Values.auth.jwtAudience | quote }}
+            {{- end }}
+            {{- end }}
 ---
 apiVersion: v1
 kind: Service

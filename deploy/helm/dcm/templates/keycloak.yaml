@@ -1,0 +1,181 @@
+{{- if .Values.auth.enabled }}
+{{- $realmTemplate := required "auth.enabled=true requires deploy/helm/dcm/files/realm-export.json. Run: make helm-chart-sync" (.Files.Get "files/realm-export.json") }}
+{{- if and .Values.auth.keycloak.route.enabled (not .Values.auth.issuerURL) }}
+{{- fail "auth.issuerURL is required when auth.keycloak.route.enabled=true" }}
+{{- end }}
+{{- if and .Values.auth.keycloak.ingress.enabled (not .Values.auth.issuerURL) }}
+{{- fail "auth.issuerURL is required when auth.keycloak.ingress.enabled=true" }}
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "dcm.fullname" . }}-keycloak-realm
+  labels:
+    {{- include "dcm.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  realm-template.json: |
+{{ $realmTemplate | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dcm.fullname" . }}-keycloak
+  labels:
+    {{- include "dcm.labels" . | nindent 4 }}
+    {{- include "dcm.selectorLabels" (dict "context" . "component" "keycloak") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dcm.selectorLabels" (dict "context" . "component" "keycloak") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dcm.selectorLabels" (dict "context" . "component" "keycloak") | nindent 8 }}
+      annotations:
+        {{- if not .Values.auth.authSecretRef }}
+        checksum/auth-secret: {{ include (print $.Template.BasePath "/secret-auth.yaml") . | sha256sum }}
+        {{- end }}
+        checksum/realm: {{ $realmTemplate | sha256sum }}
+    spec:
+      containers:
+        - name: keycloak
+          image: {{ .Values.auth.keycloak.image | quote }}
+          securityContext:
+            {{- toYaml .Values.auth.keycloak.securityContext | nindent 12 }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /opt/keycloak/data/import
+              sed "s|REPLACE_DCM_DEV_PASSWORD|${DCM_DEV_USER_PASSWORD}|g" /realm-template/realm-template.json > /opt/keycloak/data/import/realm-export.json
+              exec /opt/keycloak/bin/kc.sh start-dev --import-realm
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: management
+              containerPort: 9000
+              protocol: TCP
+          env:
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME
+              value: {{ include "dcm.keycloakHostname" . | quote }}
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dcm.authSecretName" . }}
+                  key: KEYCLOAK_ADMIN
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dcm.authSecretName" . }}
+                  key: KEYCLOAK_ADMIN_PASSWORD
+            - name: DCM_DEV_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dcm.authSecretName" . }}
+                  key: DCM_DEV_USER_PASSWORD
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            - name: realm-template
+              mountPath: /realm-template
+              readOnly: true
+      volumes:
+        - name: realm-template
+          secret:
+            secretName: {{ include "dcm.fullname" . }}-keycloak-realm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dcm.fullname" . }}-keycloak
+  labels:
+    {{- include "dcm.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "dcm.selectorLabels" (dict "context" . "component" "keycloak") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: management
+      port: 9000
+      targetPort: management
+      protocol: TCP
+{{- if .Values.auth.keycloak.route.enabled }}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "dcm.fullname" . }}-keycloak
+  labels:
+    {{- include "dcm.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.auth.keycloak.route.host }}
+  host: {{ .Values.auth.keycloak.route.host }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "dcm.fullname" . }}-keycloak
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+{{- end }}
+{{- if .Values.auth.keycloak.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "dcm.fullname" . }}-keycloak
+  labels:
+    {{- include "dcm.labels" . | nindent 4 }}
+  {{- with .Values.auth.keycloak.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.auth.keycloak.ingress.className }}
+  ingressClassName: {{ .Values.auth.keycloak.ingress.className }}
+  {{- end }}
+  rules:
+    - {{- if .Values.auth.keycloak.ingress.host }}
+      host: {{ .Values.auth.keycloak.ingress.host }}
+      {{- end }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "dcm.fullname" . }}-keycloak
+                port:
+                  number: 8080
+  {{- with .Values.auth.keycloak.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

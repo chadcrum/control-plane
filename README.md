@@ -77,14 +77,14 @@ in shared-workflows for tag behavior and version conventions.
 Full-stack Compose and Helm packaging live under `deploy/`:
 
 - **Compose:** control-plane, postgres, nats, keycloak, dcm-ui, and optional service providers
-- **Helm:** Kubernetes/OpenShift chart at `deploy/helm/dcm` (authentication is not yet integrated into the Helm chart — Keycloak is only available in the Compose stack)
+- **Helm:** Kubernetes/OpenShift chart at `deploy/helm/dcm` (optional auth via `auth.enabled`)
 
 See [deploy/RUN.md](deploy/RUN.md) for local stack usage, authentication, and service provider profiles.
 See [deploy/helm/dcm/README.md](deploy/helm/dcm/README.md) for cluster installs.
 
-Authentication is disabled by default (`AUTH_DISABLED=true`) until end-to-end
-authentication is fully implemented. Service providers do not yet forward
-authentication headers, so enabling auth will break SP communication with the
+Authentication is disabled by default (`AUTH_DISABLED=true`). The CLI forwards
+bearer tokens (`dcm login` or `DCM_TOKEN`); service providers do not yet forward
+authentication headers, so enabling auth can break SP communication with the
 control plane.
 
 | Port | Service | Notes |
