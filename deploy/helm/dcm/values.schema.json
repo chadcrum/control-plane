@@ -1,0 +1,449 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DCM Helm Chart Values",
+  "description": "Values schema for the DCM control plane Helm chart.",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "globalBase": {
+      "title": "Global Settings Base",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "imageTag": {
+          "type": "string"
+        }
+      }
+    },
+    "securityContext": {
+      "title": "Kubernetes Security Context",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runAsNonRoot": {
+          "type": "boolean"
+        },
+        "allowPrivilegeEscalation": {
+          "type": "boolean"
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "drop": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "seccompProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "runAsNonRoot",
+        "allowPrivilegeEscalation"
+      ]
+    },
+    "route": {
+      "title": "Route Configuration",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "host": {
+          "type": "string",
+          "description": "Route hostname. Empty uses an auto-generated OpenShift hostname.",
+          "default": ""
+        }
+      }
+    },
+    "ingress": {
+      "title": "Ingress Configuration",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "className": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "tls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "secretName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "hosts",
+              "secretName"
+            ]
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "keycloakConfig": {
+      "title": "Keycloak Configuration",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "type": "string"
+        },
+        "adminUser": {
+          "type": "string"
+        },
+        "adminPassword": {
+          "type": "string"
+        },
+        "devUserPassword": {
+          "type": "string",
+          "description": "Dev user password for realm import. Prefer simple values; special characters can break Keycloak entrypoint shell substitution."
+        },
+        "securityContext": {
+          "$ref": "#/definitions/securityContext"
+        },
+        "route": {
+          "$ref": "#/definitions/route"
+        },
+        "ingress": {
+          "$ref": "#/definitions/ingress"
+        }
+      }
+    },
+    "postgresConfig": {
+      "title": "PostgreSQL Configuration",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "storage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "image",
+        "user",
+        "password",
+        "storage"
+      ]
+    },
+    "natsConfig": {
+      "title": "NATS Configuration",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "type": "string"
+        },
+        "storage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "image",
+        "storage"
+      ]
+    },
+    "optionalServiceDefinition": {
+      "title": "Optional Service Provider Configuration",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Image tag. Empty defaults to global.imageTag.",
+          "default": ""
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "providerName": {
+          "type": "string"
+        },
+        "spName": {
+          "type": "string"
+        },
+        "baseDomain": {
+          "type": "string"
+        },
+        "externalSvcType": {
+          "type": "string"
+        },
+        "kubeconfig": {
+          "type": "string",
+          "description": "Raw kubeconfig content stored in a chart-managed Secret. Omit for in-cluster ServiceAccount auth when the chart creates RBAC.",
+          "default": ""
+        },
+        "kubeconfigRef": {
+          "type": "string",
+          "description": "Name of an existing Secret in the release namespace with key kubeconfig. Use instead of kubeconfig to avoid inlining sensitive data.",
+          "default": ""
+        },
+        "pullSecret": {
+          "type": "string",
+          "description": "Base64-encoded .dockerconfigjson stored in a chart-managed Secret. Required for ACM SP unless pullSecretRef is set.",
+          "default": ""
+        },
+        "pullSecretRef": {
+          "type": "string",
+          "description": "Name of an existing Secret in the release namespace with stringData key pull-secret (base64-encoded .dockerconfigjson).",
+          "default": ""
+        },
+        "defaultInfraEnv": {
+          "type": "string"
+        },
+        "agentNamespace": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "properties": {
+    "global": {
+      "$ref": "#/definitions/globalBase"
+    },
+    "postgres": {
+      "$ref": "#/definitions/postgresConfig"
+    },
+    "nats": {
+      "$ref": "#/definitions/natsConfig"
+    },
+    "controlPlane": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Image tag. Empty defaults to global.imageTag.",
+          "default": ""
+        },
+        "securityContext": {
+          "$ref": "#/definitions/securityContext"
+        },
+        "route": {
+          "$ref": "#/definitions/route"
+        },
+        "ingress": {
+          "$ref": "#/definitions/ingress"
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Deploy Keycloak and enable JWT/proxy-header auth on the control-plane."
+        },
+        "adminSubject": {
+          "type": "string",
+          "description": "Keycloak subject UUID for the admin user. Must match realm-export.json (CI verifies via helm-chart-verify-admin-subject)."
+        },
+        "proxySecret": {
+          "type": "string",
+          "description": "Shared secret for proxy-header auth fallback. Required when enabled and authSecretRef is unset."
+        },
+        "authSecretRef": {
+          "type": "string",
+          "description": "Name of a pre-existing Secret in the release namespace. When set, inline credential values are ignored.",
+          "default": ""
+        },
+        "jwtAudience": {
+          "type": "string",
+          "description": "Expected JWT audience. Empty skips audience validation.",
+          "default": "dcm-api"
+        },
+        "issuerURL": {
+          "type": "string",
+          "description": "OIDC issuer URL. Empty defaults to in-cluster Keycloak. Required when Keycloak route or ingress is enabled; must end with /realms/dcm.",
+          "default": ""
+        },
+        "keycloak": {
+          "$ref": "#/definitions/keycloakConfig"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "authSecretRef": {
+                "maxLength": 0
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "proxySecret"
+            ],
+            "properties": {
+              "proxySecret": {
+                "minLength": 1
+              },
+              "keycloak": {
+                "required": [
+                  "adminPassword",
+                  "devUserPassword"
+                ],
+                "properties": {
+                  "adminPassword": {
+                    "minLength": 1
+                  },
+                  "devUserPassword": {
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "keycloak": {
+                "properties": {
+                  "route": {
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "issuerURL"
+            ],
+            "properties": {
+              "issuerURL": {
+                "minLength": 1,
+                "pattern": ".*/realms/dcm$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "keycloak": {
+                "properties": {
+                  "ingress": {
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "issuerURL"
+            ],
+            "properties": {
+              "issuerURL": {
+                "minLength": 1,
+                "pattern": ".*/realms/dcm$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "dcmUi": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Image tag. Empty defaults to global.imageTag.",
+          "default": ""
+        },
+        "route": {
+          "$ref": "#/definitions/route"
+        },
+        "ingress": {
+          "$ref": "#/definitions/ingress"
+        }
+      }
+    },
+    "kubevirtServiceProvider": {
+      "$ref": "#/definitions/optionalServiceDefinition"
+    },
+    "k8sContainerServiceProvider": {
+      "$ref": "#/definitions/optionalServiceDefinition"
+    },
+    "acmClusterServiceProvider": {
+      "$ref": "#/definitions/optionalServiceDefinition"
+    },
+    "threeTierDemoServiceProvider": {
+      "$ref": "#/definitions/optionalServiceDefinition"
+    }
+  }
+}

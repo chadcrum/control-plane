@@ -114,4 +114,4 @@ tidy:
 
 .PHONY: build run run-dev compose-up compose-up-with-providers compose-down image-build \
 	clean fmt vet lint test test-catalog test-placement test-policy test-sp tidy \
-	helm-chart-sync helm-chart-verify-sync helm-chart-verify-admin-subject helm-chart-verify helm-chart-lint helm-chart-template helm-chart-check
+	helm-chart-sync helm-chart-verify-sync helm-chart-verify-admin-subject helm-chart-verify helm-chart-verify-schema helm-chart-lint helm-chart-template helm-chart-check

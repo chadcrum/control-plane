@@ -1,5 +1,7 @@
 # DCM Helm Chart
 
+AI agents maintaining this chart: see [AGENTS.md](AGENTS.md).
+
 ## Prerequisites
 
 - Kubernetes 1.24+ or OpenShift 4.12+
@@ -111,6 +113,22 @@ A demo provider for a three-tier application. Requires the Kubernetes Container 
 helm upgrade dcm deploy/helm/dcm --reuse-values \
   --set k8sContainerServiceProvider.enabled=true \
   --set threeTierDemoServiceProvider.enabled=true
+```
+
+## Values schema and maintainability
+
+**Install-time validation**: `deploy/helm/dcm/values.schema.json` is the contract that helm validates against at install/upgrade/lint time.
+
+**Keep in sync:** When modifying `values.yaml`, also update `values.schema.json` to catch mistypes or unknown values early. Running `make helm-chart-sync` then `make helm-chart-check` ensures your changes don't introduce lint errors.
+
+**Template-time rules**: `scripts/verify-template.sh` remains authoritative for render-time constraints that the schema cannot express (e.g., "Secret must not emit when authSecretRef is set"). Schema guards and template guards operate independently.
+
+### Run full validation
+
+```bash
+make helm-chart-sync   # realm file
+make helm-chart-check  # verify/schema/lint/template
+scripts/verify-template.sh deploy/helm/dcm    # positive & negative tests
 ```
 
 ## Authentication

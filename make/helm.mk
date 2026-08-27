@@ -1,6 +1,8 @@
+# Helm chart CI (sync, verify, schema, lint, template).
 HELM_CHART_DIR := deploy/helm/dcm
 HELM_VALUES := $(HELM_CHART_DIR)/values.yaml
 HELM_VERIFY_TEMPLATE := $(HELM_CHART_DIR)/scripts/verify-template.sh
+HELM_VERIFY_SCHEMA := $(HELM_CHART_DIR)/scripts/verify-schema.sh
 KEYCLOAK_REALM_SRC := deploy/keycloak/realm-export.json
 HELM_REALM_DEST := $(HELM_CHART_DIR)/files/realm-export.json
 
@@ -24,12 +26,20 @@ helm-chart-verify-admin-subject:
 
 helm-chart-verify: helm-chart-verify-sync helm-chart-verify-admin-subject
 
+helm-chart-verify-schema: helm-chart-verify
+	@echo '--->> verify-schema: $(HELM_CHART_DIR)' >&2
+	@$(HELM_VERIFY_SCHEMA) $(HELM_CHART_DIR)
+
 helm-chart-lint: helm-chart-verify
+	@echo '--->> helm lint: $(HELM_CHART_DIR)' >&2
 	helm lint $(HELM_CHART_DIR)
 
 helm-chart-template: helm-chart-verify
+	@echo '--->> verify-template: $(HELM_CHART_DIR)' >&2
 	$(HELM_VERIFY_TEMPLATE) $(HELM_CHART_DIR)
 
-helm-chart-check: helm-chart-verify helm-chart-lint helm-chart-template
+helm-chart-check: helm-chart-verify helm-chart-verify-schema helm-chart-lint helm-chart-template
+	@echo ''
+	@echo '=== All checks passed! ==='
 
-.PHONY: helm-chart-sync helm-chart-verify-sync helm-chart-verify-admin-subject helm-chart-verify helm-chart-lint helm-chart-template helm-chart-check
+.PHONY: helm-chart-sync helm-chart-verify-sync helm-chart-verify-admin-subject helm-chart-verify helm-chart-verify-schema helm-chart-lint helm-chart-template helm-chart-check
