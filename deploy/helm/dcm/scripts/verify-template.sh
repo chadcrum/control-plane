@@ -10,7 +10,7 @@ fail() {
 }
 
 helm_out() {
-	helm template "$release" "$chart_dir" "$@"
+	helm template "$release" "$chart_dir" "--skip-schema-validation" "$@"
 }
 
 yaml_block() {

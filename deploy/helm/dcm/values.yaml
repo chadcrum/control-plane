@@ -1,3 +1,4 @@
+# Schema: deploy/helm/dcm/values.schema.json (keep in sync when changing any defaults)
 # -- Global settings
 global:
   imageTag: main
@@ -37,16 +38,13 @@ controlPlane:
     annotations: {}
 
 # -- Authentication (mirrors compose: Keycloak + control-plane JWT/proxy-header auth)
-# Disabled by default. When enabled, deploys Keycloak and sets AUTH_* on the control-plane.
-# Route/Ingress stay on the control-plane; clients send Authorization: Bearer tokens.
-# Defaults are for local/lab only — use authSecretRef or override inline values on shared clusters.
 auth:
   enabled: false
   adminSubject: "56deb662-4820-5d83-b828-f4beb11a5fa7"  # synced with realm-export.json; CI verifies via helm-chart-verify-admin-subject
   proxySecret: "dcm-dev-proxy-secret"
   authSecretRef: ""  # name of a pre-existing Secret in the release namespace (see README); when set, inline defaults are ignored
   jwtAudience: "dcm-api"  # empty = skip audience check
-  issuerURL: ""    # empty = http://<fullname>-keycloak:8080/realms/dcm; also drives KC_HOSTNAME
+  issuerURL: ""  # empty = http://<fullname>-keycloak:8080/realms/dcm; also drives KC_HOSTNAME
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     adminUser: admin
@@ -111,15 +109,12 @@ acmClusterServiceProvider:
   spName: acm-cluster-sp
   namespace: default
   baseDomain: ""
-  pullSecret: ""     # base64-encoded .dockerconfigjson (required unless pullSecretRef is set)
-  pullSecretRef: ""  # name of an existing Secret in the *release namespace* with key "pull-secret"
-                     # whose value is the base64-encoded .dockerconfigjson string
-                     # (secretKeyRef is same-namespace only; the Secret must use stringData)
+  pullSecret: ""  # base64-encoded .dockerconfigjson (required unless pullSecretRef is set)
+  pullSecretRef: ""  # existing Secret in release namespace; key pull-secret (see README)
   defaultInfraEnv: ""
   agentNamespace: ""
-  kubeconfig: ""        # raw kubeconfig content; omit for in-cluster SA auth with auto-created RBAC
-  kubeconfigRef: ""     # name of an existing Secret in the *release namespace* with key "kubeconfig"
-                        # (use instead of kubeconfig to avoid inlining sensitive data in values)
+  kubeconfig: ""  # raw kubeconfig content; omit for in-cluster SA auth with auto-created RBAC
+  kubeconfigRef: ""  # existing Secret in release namespace with key kubeconfig
 
 threeTierDemoServiceProvider:
   enabled: false
