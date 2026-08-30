@@ -15,7 +15,8 @@ endif
 COMPOSE_FILE := deploy/compose.yaml
 COMPOSE_PROJECT_NAME ?= control-plane
 COMPOSE_NETWORK := $(COMPOSE_PROJECT_NAME)_default
-PROFILES ?= providers
+PROFILES ?=
+AUTH ?=
 
 COMPOSE ?= $(shell command -v podman-compose >/dev/null 2>&1 && echo podman-compose || \
 	(command -v docker-compose >/dev/null 2>&1 && echo docker-compose || \
@@ -50,12 +51,14 @@ run-dev:
 	go run ./cmd/$(BINARY_NAME)
 
 # Platform stack: Postgres, NATS, control-plane, and dcm-ui (see deploy/compose.yaml).
+# Optional: AUTH=true to also start Keycloak (uncomment auth vars in deploy/.env first).
 compose-up:
-	$(COMPOSE) -f $(COMPOSE_FILE) up -d --build
+	$(COMPOSE) -f $(COMPOSE_FILE) $(if $(filter true,$(AUTH)),--profile auth,) up -d --build
 
 # Platform stack with optional service providers (see deploy/RUN.md).
+# Optional: AUTH=true to also start Keycloak.
 compose-up-with-providers:
-	$(COMPOSE) -f $(COMPOSE_FILE) --profile $(PROFILES) up -d --build
+	$(COMPOSE) -f $(COMPOSE_FILE) $(if $(filter true,$(AUTH)),--profile auth,) --profile $(or $(PROFILES),providers) up -d --build
 
 # Tear down the compose stack. Kind (or other externals) joined to the compose
 # network block "compose down" from removing it — disconnect them first.
@@ -103,6 +106,12 @@ GOLANGCI_LINT_VERSION ?= v2.12.2
 GINKGO := go run github.com/onsi/ginkgo/v2/ginkgo
 GINKGO_FLAGS := -r --randomize-all --fail-on-pending
 
+# Subsystem compose stacks read credentials from gitignored test/subsystem/.env.
+subsystem-env:
+	@test -f test/subsystem/.env || cp test/subsystem/.env.example test/subsystem/.env
+
+auth-subsystem-test-up catalog-subsystem-test-up policy-subsystem-test-up sp-subsystem-test-up: subsystem-env
+
 lint:
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
 
@@ -113,5 +122,5 @@ tidy:
 	go mod tidy
 
 .PHONY: build run run-dev compose-up compose-up-with-providers compose-down image-build \
-	clean fmt vet lint test test-catalog test-placement test-policy test-sp tidy \
+	clean fmt vet lint test test-catalog test-placement test-policy test-sp tidy subsystem-env \
 	helm-chart-sync helm-chart-verify-sync helm-chart-verify-admin-subject helm-chart-verify helm-chart-verify-schema helm-chart-lint helm-chart-template helm-chart-check

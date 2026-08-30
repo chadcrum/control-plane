@@ -1,19 +1,17 @@
-# Policy subsystem test stack. Credentials: set POSTGRES_USER and
-# POSTGRES_PASSWORD in the environment or in a .env file (see ../../../.env.example).
+# Policy subsystem test stack. Shared env: test/subsystem/.env (see .env.example).
 
 services:
   postgres:
     image: quay.io/sclorg/postgresql-16-c9s:latest
+    env_file: ../.env
     environment:
       POSTGRESQL_DATABASE: policy_manager_test
-      POSTGRESQL_USER: ${POSTGRES_USER:-test_user}
-      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/pgsql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-test_user} -d policy_manager_test"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRESQL_USER\" -d policy_manager_test"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,14 +23,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file: ../.env
     environment:
       BIND_ADDRESS: "0.0.0.0:8080"
       DB_TYPE: pgsql
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: policy_manager_test
-      DB_USER: ${POSTGRES_USER:-test_user}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
       LOG_LEVEL: debug
       NATS_DISABLED: "true"
       AUTH_DISABLED: "true"
