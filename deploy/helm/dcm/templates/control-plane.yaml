@@ -16,9 +16,6 @@ spec:
         {{- include "dcm.selectorLabels" (dict "context" . "component" "control-plane") | nindent 8 }}
       {{- if .Values.auth.enabled }}
       annotations:
-        {{- if not .Values.auth.authSecretRef }}
-        checksum/auth-secret: {{ include (print $.Template.BasePath "/secret-auth.yaml") . | sha256sum }}
-        {{- end }}
         checksum/realm: {{ required "auth.enabled=true requires deploy/helm/dcm/files/realm-export.json. Run: make helm-chart-sync" (.Files.Get "files/realm-export.json") | sha256sum }}
       {{- end }}
     spec:
@@ -37,7 +34,7 @@ spec:
               protocol: TCP
           envFrom:
             - secretRef:
-                name: {{ include "dcm.fullname" . }}-db
+                name: {{ include "dcm.dbSecretName" . }}
           env:
             - name: DB_TYPE
               value: pgsql

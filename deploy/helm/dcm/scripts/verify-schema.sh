@@ -35,13 +35,17 @@ echo "Verify schema negative tests for chart: $chart_dir"
 echo "Schema file: $schema_file"
 echo ""
 
-# Positive: auth enabled with default inline credentials
-expect_lint_pass "auth.enabled=true with inline credentials" \
-	--set 'auth.enabled=true'
+# Positive: default install with external db secret ref
+expect_lint_pass "default values with dbSecretRef" \
+	--set 'postgres.dbSecretRef=dcm-db'
 
-# Test (a): Missing proxySecret and auth secret ref when auth.enabled=true
-expect_lint_fail "auth.enabled=true without proxySecret and authSecretRef" \
-	--set 'auth.enabled=true,auth.proxySecret=,auth.authSecretRef='
+# Positive: auth enabled with external auth secret ref
+expect_lint_pass "auth.enabled=true with authSecretRef" \
+	--set 'auth.enabled=true,auth.authSecretRef=dcm-auth'
+
+# Test (a): Missing authSecretRef when auth.enabled=true
+expect_lint_fail "auth.enabled=true without authSecretRef" \
+	--set 'auth.enabled=true,auth.authSecretRef='
 
 # Test (b): route enabled without issuerURL (authSecretRef bypasses inline credential requirement)
 expect_lint_fail "keycloak.route.enabled=true without issuerURL" \

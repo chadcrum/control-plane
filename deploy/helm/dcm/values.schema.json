@@ -117,16 +117,6 @@
         "image": {
           "type": "string"
         },
-        "adminUser": {
-          "type": "string"
-        },
-        "adminPassword": {
-          "type": "string"
-        },
-        "devUserPassword": {
-          "type": "string",
-          "description": "Dev user password for realm import. Prefer simple values; special characters can break Keycloak entrypoint shell substitution."
-        },
         "securityContext": {
           "$ref": "#/definitions/securityContext"
         },
@@ -146,11 +136,9 @@
         "image": {
           "type": "string"
         },
-        "user": {
-          "type": "string"
-        },
-        "password": {
-          "type": "string"
+        "dbSecretRef": {
+          "type": "string",
+          "description": "Name of a pre-existing Secret in the release namespace with database credentials."
         },
         "storage": {
           "type": "string"
@@ -158,8 +146,7 @@
       },
       "required": [
         "image",
-        "user",
-        "password",
+        "dbSecretRef",
         "storage"
       ]
     },
@@ -211,19 +198,9 @@
         "externalSvcType": {
           "type": "string"
         },
-        "kubeconfig": {
-          "type": "string",
-          "description": "Raw kubeconfig content stored in a chart-managed Secret. Omit for in-cluster ServiceAccount auth when the chart creates RBAC.",
-          "default": ""
-        },
         "kubeconfigRef": {
           "type": "string",
-          "description": "Name of an existing Secret in the release namespace with key kubeconfig. Use instead of kubeconfig to avoid inlining sensitive data.",
-          "default": ""
-        },
-        "pullSecret": {
-          "type": "string",
-          "description": "Base64-encoded .dockerconfigjson stored in a chart-managed Secret. Required for ACM SP unless pullSecretRef is set.",
+          "description": "Name of an existing Secret in the release namespace with key kubeconfig.",
           "default": ""
         },
         "pullSecretRef": {
@@ -286,13 +263,9 @@
           "type": "string",
           "description": "Keycloak subject UUID for the admin user. Must match realm-export.json (CI verifies via helm-chart-verify-admin-subject)."
         },
-        "proxySecret": {
-          "type": "string",
-          "description": "Shared secret for proxy-header auth fallback. Required when enabled and authSecretRef is unset."
-        },
         "authSecretRef": {
           "type": "string",
-          "description": "Name of a pre-existing Secret in the release namespace. When set, inline credential values are ignored.",
+          "description": "Name of a pre-existing Secret in the release namespace with auth credentials.",
           "default": ""
         },
         "jwtAudience": {
@@ -315,33 +288,16 @@
             "properties": {
               "enabled": {
                 "const": true
-              },
-              "authSecretRef": {
-                "maxLength": 0
               }
             }
           },
           "then": {
             "required": [
-              "proxySecret"
+              "authSecretRef"
             ],
             "properties": {
-              "proxySecret": {
+              "authSecretRef": {
                 "minLength": 1
-              },
-              "keycloak": {
-                "required": [
-                  "adminPassword",
-                  "devUserPassword"
-                ],
-                "properties": {
-                  "adminPassword": {
-                    "minLength": 1
-                  },
-                  "devUserPassword": {
-                    "minLength": 1
-                  }
-                }
               }
             }
           }
