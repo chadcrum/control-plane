@@ -15,7 +15,8 @@ endif
 COMPOSE_FILE := deploy/compose.yaml
 COMPOSE_PROJECT_NAME ?= control-plane
 COMPOSE_NETWORK := $(COMPOSE_PROJECT_NAME)_default
-PROFILES ?= providers
+PROFILES ?=
+AUTH ?=
 
 COMPOSE ?= $(shell command -v podman-compose >/dev/null 2>&1 && echo podman-compose || \
 	(command -v docker-compose >/dev/null 2>&1 && echo docker-compose || \
@@ -50,12 +51,14 @@ run-dev:
 	go run ./cmd/$(BINARY_NAME)
 
 # Platform stack: Postgres, NATS, control-plane, and dcm-ui (see deploy/compose.yaml).
+# Optional: AUTH=true to also start Keycloak (uncomment auth vars in deploy/.env first).
 compose-up:
-	$(COMPOSE) -f $(COMPOSE_FILE) up -d --build
+	$(COMPOSE) -f $(COMPOSE_FILE) $(if $(filter true,$(AUTH)),--profile auth,) up -d --build
 
 # Platform stack with optional service providers (see deploy/RUN.md).
+# Optional: AUTH=true to also start Keycloak.
 compose-up-with-providers:
-	$(COMPOSE) -f $(COMPOSE_FILE) --profile $(PROFILES) up -d --build
+	$(COMPOSE) -f $(COMPOSE_FILE) $(if $(filter true,$(AUTH)),--profile auth,) --profile $(or $(PROFILES),providers) up -d --build
 
 # Tear down the compose stack. Kind (or other externals) joined to the compose
 # network block "compose down" from removing it — disconnect them first.
