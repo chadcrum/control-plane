@@ -6,8 +6,7 @@ global:
 # -- PostgreSQL
 postgres:
   image: docker.io/library/postgres:16-alpine
-  user: admin
-  password: adminpass
+  dbSecretRef: dcm-db  # pre-created Secret in release namespace (see README)
   storage: 1Gi
 
 # -- NATS
@@ -41,16 +40,11 @@ controlPlane:
 auth:
   enabled: false
   adminSubject: "56deb662-4820-5d83-b828-f4beb11a5fa7"  # synced with realm-export.json; CI verifies via helm-chart-verify-admin-subject
-  proxySecret: "dcm-dev-proxy-secret"
-  authSecretRef: ""  # name of a pre-existing Secret in the release namespace (see README); when set, inline defaults are ignored
+  authSecretRef: dcm-auth  # pre-created Secret when auth.enabled=true (see README)
   jwtAudience: "dcm-api"  # empty = skip audience check
   issuerURL: ""  # empty = http://<fullname>-keycloak:8080/realms/dcm; also drives KC_HOSTNAME
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    adminUser: admin
-    adminPassword: admin
-    # Prefer simple passwords; shell substitution in the Keycloak entrypoint is fragile with special chars
-    devUserPassword: admin
+    image: quay.io/keycloak/keycloak:26.0.1
     securityContext:
       runAsNonRoot: true
       allowPrivilegeEscalation: false
@@ -91,7 +85,7 @@ kubevirtServiceProvider:
   tag: ""
   providerName: kubevirt-service-provider
   namespace: default
-  kubeconfig: ""  # base64-encoded kubeconfig content for the Secret
+  kubeconfigRef: ""  # optional; pre-existing Secret with key kubeconfig
 
 k8sContainerServiceProvider:
   enabled: false
@@ -100,7 +94,7 @@ k8sContainerServiceProvider:
   spName: k8s-container-provider
   namespace: default
   externalSvcType: NodePort
-  kubeconfig: ""
+  kubeconfigRef: ""  # optional; omit for in-cluster ServiceAccount auth with chart RBAC
 
 acmClusterServiceProvider:
   enabled: false
@@ -109,12 +103,10 @@ acmClusterServiceProvider:
   spName: acm-cluster-sp
   namespace: default
   baseDomain: ""
-  pullSecret: ""  # base64-encoded .dockerconfigjson (required unless pullSecretRef is set)
-  pullSecretRef: ""  # existing Secret in release namespace; key pull-secret (see README)
+  pullSecretRef: dcm-acm-pull-secret  # pre-created Secret when enabled (see README)
   defaultInfraEnv: ""
   agentNamespace: ""
-  kubeconfig: ""  # raw kubeconfig content; omit for in-cluster SA auth with auto-created RBAC
-  kubeconfigRef: ""  # existing Secret in release namespace with key kubeconfig
+  kubeconfigRef: ""  # optional; omit for in-cluster ServiceAccount auth with auto-created RBAC
 
 threeTierDemoServiceProvider:
   enabled: false
@@ -122,4 +114,4 @@ threeTierDemoServiceProvider:
   tag: ""
   spName: three-tier-provider
   namespace: default
-  kubeconfig: ""
+  kubeconfigRef: ""

@@ -34,9 +34,6 @@ spec:
       labels:
         {{- include "dcm.selectorLabels" (dict "context" . "component" "keycloak") | nindent 8 }}
       annotations:
-        {{- if not .Values.auth.authSecretRef }}
-        checksum/auth-secret: {{ include (print $.Template.BasePath "/secret-auth.yaml") . | sha256sum }}
-        {{- end }}
         checksum/realm: {{ $realmTemplate | sha256sum }}
     spec:
       containers:
@@ -44,13 +41,9 @@ spec:
           image: {{ .Values.auth.keycloak.image | quote }}
           securityContext:
             {{- toYaml .Values.auth.keycloak.securityContext | nindent 12 }}
-          command:
-            - /bin/sh
-            - -c
-            - |
-              mkdir -p /opt/keycloak/data/import
-              sed "s|REPLACE_DCM_DEV_PASSWORD|${DCM_DEV_USER_PASSWORD}|g" /realm-template/realm-template.json > /opt/keycloak/data/import/realm-export.json
-              exec /opt/keycloak/bin/kc.sh start-dev --import-realm
+          args:
+            - start-dev
+            - --import-realm
           ports:
             - name: http
               containerPort: 8080
@@ -80,6 +73,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "dcm.authSecretName" . }}
                   key: DCM_DEV_USER_PASSWORD
+            - name: AUTH_PROXY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dcm.authSecretName" . }}
+                  key: AUTH_PROXY_SECRET
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -98,7 +96,8 @@ spec:
             failureThreshold: 5
           volumeMounts:
             - name: realm-template
-              mountPath: /realm-template
+              mountPath: /opt/keycloak/data/import/realm-export.json
+              subPath: realm-template.json
               readOnly: true
       volumes:
         - name: realm-template

@@ -47,7 +47,7 @@ require_template_failure() {
 	fi
 }
 
-helm_out --set auth.enabled=false >/dev/null
+helm_out >/dev/null
 
 issuer_url="https://keycloak.example.com/realms/dcm"
 
@@ -58,7 +58,7 @@ require_block "Keycloak Route manifest when auth.keycloak.route.enabled=true" 'B
 
 require_block "Keycloak Ingress manifest when auth.keycloak.ingress.enabled=true" 'BEGIN{RS="---"} /templates\/keycloak.yaml/ && /kind: Ingress/ {print; exit}' --set auth.enabled=true --set auth.issuerURL="$issuer_url" --set auth.keycloak.ingress.enabled=true >/dev/null
 
-require_template_failure "empty auth credentials" "auth.proxySecret or auth.authSecretRef is required when auth.enabled=true" --set auth.enabled=true --set auth.proxySecret= --set auth.authSecretRef=
+require_template_failure "auth enabled without authSecretRef" "auth.authSecretRef is required when auth.enabled=true" --set auth.enabled=true --set auth.authSecretRef=
 
 require_template_failure "route without auth.issuerURL" "auth.issuerURL is required when auth.keycloak.route.enabled=true" --set auth.enabled=true --set auth.keycloak.route.enabled=true
 
@@ -68,8 +68,16 @@ require_template_failure "ingress without auth.issuerURL" "auth.issuerURL is req
 
 auth_ref_out="$(helm_out --set auth.enabled=true --set auth.authSecretRef=my-auth)"
 if printf '%s' "$auth_ref_out" | awk 'BEGIN{RS="---"} /kind: Secret/ && /name: dcm-auth/ {found=1} END{exit !found}'; then
-	fail "chart auth Secret must not render when auth.authSecretRef is set"
+	fail "chart auth Secret must not render when using external authSecretRef"
 fi
 auth_ref_count="$(printf '%s' "$auth_ref_out" | grep -c 'name: my-auth')"
-[ "$auth_ref_count" -eq 4 ] || fail "pods must reference auth.authSecretRef in all 4 secretKeyRef entries (found $auth_ref_count)"
+[ "$auth_ref_count" -eq 5 ] || fail "pods must reference auth.authSecretRef in all 5 secretKeyRef entries (found $auth_ref_count)"
 
+db_ref_out="$(helm_out)"
+if printf '%s' "$db_ref_out" | awk 'BEGIN{RS="---"} /kind: Secret/ && /name: dcm-db/ && /stringData/ {found=1} END{exit !found}'; then
+	fail "chart db Secret must not render; use postgres.dbSecretRef"
+fi
+db_ref_count="$(printf '%s' "$db_ref_out" | grep -c 'name: dcm-db')"
+[ "$db_ref_count" -ge 2 ] || fail "workloads must reference postgres.dbSecretRef (found $db_ref_count)"
+
+require_template_failure "acm without pullSecretRef" "acmClusterServiceProvider.pullSecretRef is required when enabled" --set acmClusterServiceProvider.enabled=true --set acmClusterServiceProvider.pullSecretRef=
