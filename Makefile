@@ -13,6 +13,8 @@ $(error No supported container engine found. Please install podman or docker, or
 endif
 
 COMPOSE_FILE := deploy/compose.yaml
+COMPOSE_ENV_FILE := deploy/.env
+COMPOSE_DEPLOY := $(COMPOSE) --env-file $(COMPOSE_ENV_FILE) -f $(COMPOSE_FILE)
 COMPOSE_PROJECT_NAME ?= control-plane
 COMPOSE_NETWORK := $(COMPOSE_PROJECT_NAME)_default
 PROFILES ?=
@@ -53,12 +55,12 @@ run-dev:
 # Platform stack: Postgres, NATS, control-plane, and dcm-ui (see deploy/compose.yaml).
 # Optional: AUTH=true to also start Keycloak (uncomment auth vars in deploy/.env first).
 compose-up:
-	$(COMPOSE) -f $(COMPOSE_FILE) $(if $(filter true,$(AUTH)),--profile auth,) up -d --build
+	$(COMPOSE_DEPLOY) $(if $(filter true,$(AUTH)),--profile auth,) up -d --build
 
 # Platform stack with optional service providers (see deploy/RUN.md).
 # Optional: AUTH=true to also start Keycloak.
 compose-up-with-providers:
-	$(COMPOSE) -f $(COMPOSE_FILE) $(if $(filter true,$(AUTH)),--profile auth,) --profile $(or $(PROFILES),providers) up -d --build
+	$(COMPOSE_DEPLOY) $(if $(filter true,$(AUTH)),--profile auth,) --profile $(or $(PROFILES),providers) up -d --build
 
 # Tear down the compose stack. Kind (or other externals) joined to the compose
 # network block "compose down" from removing it — disconnect them first.
@@ -79,8 +81,8 @@ compose-down:
 			fi; \
 		fi; \
 	done; \
-	COMPOSE_PROJECT_NAME=deploy $(COMPOSE) -f $(COMPOSE_FILE) down -v --remove-orphans 2>/dev/null || true; \
-	$(COMPOSE) -f $(COMPOSE_FILE) down -v --remove-orphans; \
+	COMPOSE_PROJECT_NAME=deploy $(COMPOSE_DEPLOY) down -v --remove-orphans 2>/dev/null || true; \
+	$(COMPOSE_DEPLOY) down -v --remove-orphans; \
 	for network in deploy_default $(COMPOSE_NETWORK); do \
 		if [ "$(CONTAINER_ENGINE)" = podman ]; then \
 			podman network rm -f "$$network" 2>/dev/null || true; \
