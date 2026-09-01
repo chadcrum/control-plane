@@ -9,7 +9,7 @@ auth-subsystem-test-up:
 auth-subsystem-test-down:
 	$(AUTH_COMPOSE) down -v
 
-auth-subsystem-test:
-	$(GINKGO) $(GINKGO_FLAGS) -tags=subsystem ./test/subsystem/$(AUTH_DOMAIN)
+auth-subsystem-test: subsystem-env
+	set -a && . test/subsystem/.env && set +a && $(GINKGO) $(GINKGO_FLAGS) -tags=subsystem ./test/subsystem/$(AUTH_DOMAIN)
 
 .PHONY: auth-subsystem-test-up auth-subsystem-test-down auth-subsystem-test

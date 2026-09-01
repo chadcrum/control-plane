@@ -24,8 +24,8 @@ func getKeycloakAdminToken() string {
 	resp, err := httpClient.PostForm(tokenURL, url.Values{
 		"grant_type": {"password"},
 		"client_id":  {"admin-cli"},
-		"username":   {"admin"},
-		"password":   {"admin"},
+		"username":   {envOrDefault("KEYCLOAK_ADMIN", "admin")},
+		"password":   {envOrDefault("KEYCLOAK_ADMIN_PASSWORD", "admin")},
 	})
 	Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
