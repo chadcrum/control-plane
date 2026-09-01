@@ -59,6 +59,14 @@ components:
             resources:
               $ref: '#/components/schemas/DatabaseResources'
 
+            replicas:
+              type: integer
+              description: Number of database replicas
+              minimum: 1
+              example: 3
+
+            network:
+              $ref: '#/components/schemas/DatabaseNetwork'
             connection_string:
               type: string
               description: |
@@ -80,18 +88,26 @@ components:
         - storage
       properties:
         cpu:
-          type: integer
-          description: CPU cores
-          minimum: 1
-          example: 4
+          $ref: "../common.yaml#/components/schemas/CpuResources"
         memory:
-          type: string
-          description: Memory with unit suffix
-          pattern: '^[0-9]+(MB|GB|TB)$'
-          example: 16GB
+          $ref: "../common.yaml#/components/schemas/MemoryResources"
         storage:
           type: string
           description: Storage size with unit suffix
           pattern: '^[0-9]+(MB|GB|TB)$'
           example: 100GB
+      additionalProperties: true
+
+    DatabaseNetwork:
+      type: object
+      description: Network configuration for the database
+      properties:
+        port:
+          $ref: "../common.yaml#/components/schemas/NetworkPort"
+        visibility:
+          type: string
+          desciption: Database visibility
+          enum:
+            - internal
+            - external
       additionalProperties: true

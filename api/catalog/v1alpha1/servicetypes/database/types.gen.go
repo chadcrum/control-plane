@@ -11,13 +11,42 @@ import (
 	externalRef0 "github.com/dcm-project/control-plane/api/catalog/v1alpha1/servicetypes"
 )
 
+// Defines values for DatabaseNetworkVisibility.
+const (
+	External DatabaseNetworkVisibility = "external"
+	Internal DatabaseNetworkVisibility = "internal"
+)
+
+// Valid indicates whether the value is a known member of the DatabaseNetworkVisibility enum.
+func (e DatabaseNetworkVisibility) Valid() bool {
+	switch e {
+	case External:
+		return true
+	case Internal:
+		return true
+	default:
+		return false
+	}
+}
+
+// DatabaseNetwork Network configuration for the database
+type DatabaseNetwork struct {
+	// Port Port number inside container
+	Port                 *externalRef0.NetworkPort  `json:"port,omitempty"`
+	Visibility           *DatabaseNetworkVisibility `json:"visibility,omitempty"`
+	AdditionalProperties map[string]interface{}     `json:"-"`
+}
+
+// DatabaseNetworkVisibility defines model for DatabaseNetwork.Visibility.
+type DatabaseNetworkVisibility string
+
 // DatabaseResources Resource allocation for the database
 type DatabaseResources struct {
-	// Cpu CPU cores
-	Cpu int `json:"cpu"`
+	// Cpu CPU allocation in whole cores or millicores (e.g. 2, 500m, 1000m = 1 core)
+	Cpu externalRef0.CpuResources `json:"cpu"`
 
-	// Memory Memory with unit suffix
-	Memory string `json:"memory"`
+	// Memory Memory allocation
+	Memory externalRef0.MemoryResources `json:"memory"`
 
 	// Storage Storage size with unit suffix
 	Storage              string                 `json:"storage"`
@@ -53,6 +82,9 @@ type DatabaseSpec struct {
 	// Used by all service type specifications.
 	Metadata externalRef0.ServiceMetadata `json:"metadata"`
 
+	// Network Network configuration for the database
+	Network *DatabaseNetwork `json:"network,omitempty"`
+
 	// Path Resource path or location within the system hierarchy.
 	Path *string `json:"path,omitempty"`
 
@@ -64,6 +96,9 @@ type DatabaseSpec struct {
 	// Keys are provider identifiers (e.g., kubevirt, vmware, aws).
 	// Values are provider-specific configuration objects.
 	ProviderHints *externalRef0.ProviderHints `json:"provider_hints,omitempty"`
+
+	// Replicas Number of database replicas
+	Replicas *int `json:"replicas,omitempty"`
 
 	// Resources Resource allocation for the database
 	Resources DatabaseResources `json:"resources"`
@@ -85,6 +120,89 @@ type DatabaseSpec struct {
 	// Providers map this to their supported versions.
 	Version              string                 `json:"version"`
 	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// Getter for additional properties for DatabaseNetwork. Returns the specified
+// element and whether it was found
+func (a DatabaseNetwork) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for DatabaseNetwork
+func (a *DatabaseNetwork) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for DatabaseNetwork to handle AdditionalProperties
+func (a *DatabaseNetwork) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["port"]; found {
+		err = json.Unmarshal(raw, &a.Port)
+		if err != nil {
+			return fmt.Errorf("error reading 'port': %w", err)
+		}
+		delete(object, "port")
+	}
+
+	if raw, found := object["visibility"]; found {
+		err = json.Unmarshal(raw, &a.Visibility)
+		if err != nil {
+			return fmt.Errorf("error reading 'visibility': %w", err)
+		}
+		delete(object, "visibility")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for DatabaseNetwork to handle AdditionalProperties
+func (a DatabaseNetwork) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Port != nil {
+		object["port"], err = json.Marshal(a.Port)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'port': %w", err)
+		}
+	}
+
+	if a.Visibility != nil {
+		object["visibility"], err = json.Marshal(a.Visibility)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'visibility': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
 }
 
 // Getter for additional properties for DatabaseResources. Returns the specified
@@ -244,6 +362,14 @@ func (a *DatabaseSpec) UnmarshalJSON(b []byte) error {
 		delete(object, "metadata")
 	}
 
+	if raw, found := object["network"]; found {
+		err = json.Unmarshal(raw, &a.Network)
+		if err != nil {
+			return fmt.Errorf("error reading 'network': %w", err)
+		}
+		delete(object, "network")
+	}
+
 	if raw, found := object["path"]; found {
 		err = json.Unmarshal(raw, &a.Path)
 		if err != nil {
@@ -258,6 +384,14 @@ func (a *DatabaseSpec) UnmarshalJSON(b []byte) error {
 			return fmt.Errorf("error reading 'provider_hints': %w", err)
 		}
 		delete(object, "provider_hints")
+	}
+
+	if raw, found := object["replicas"]; found {
+		err = json.Unmarshal(raw, &a.Replicas)
+		if err != nil {
+			return fmt.Errorf("error reading 'replicas': %w", err)
+		}
+		delete(object, "replicas")
 	}
 
 	if raw, found := object["resources"]; found {
@@ -358,6 +492,13 @@ func (a DatabaseSpec) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("error marshaling 'metadata': %w", err)
 	}
 
+	if a.Network != nil {
+		object["network"], err = json.Marshal(a.Network)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'network': %w", err)
+		}
+	}
+
 	if a.Path != nil {
 		object["path"], err = json.Marshal(a.Path)
 		if err != nil {
@@ -369,6 +510,13 @@ func (a DatabaseSpec) MarshalJSON() ([]byte, error) {
 		object["provider_hints"], err = json.Marshal(a.ProviderHints)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'provider_hints': %w", err)
+		}
+	}
+
+	if a.Replicas != nil {
+		object["replicas"], err = json.Marshal(a.Replicas)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'replicas': %w", err)
 		}
 	}
 

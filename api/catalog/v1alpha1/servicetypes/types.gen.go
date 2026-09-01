@@ -4,6 +4,8 @@
 package servicetypes
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -100,6 +102,29 @@ type CommonFields struct {
 	UpdateTime *time.Time `json:"update_time,omitempty"`
 }
 
+// CpuResources CPU allocation in whole cores or millicores (e.g. 2, 500m, 1000m = 1 core)
+type CpuResources struct {
+	// Max Maximum allowed CPU in whole cores or millicores
+	Max string `json:"max"`
+
+	// Min Minimum guaranteed CPU in whole cores or millicores
+	Min                  string                 `json:"min"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// MemoryResources Memory allocation
+type MemoryResources struct {
+	// Max Maximum allowed memory with unit suffix
+	Max string `json:"max"`
+
+	// Min Minimum guaranteed memory with unit suffix
+	Min                  string                 `json:"min"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// NetworkPort Port number inside container
+type NetworkPort = int
+
 // ProviderHints Optional provider-specific configuration.
 //
 // Allows platform-specific settings without breaking portability.
@@ -145,3 +170,161 @@ type ServiceMetadata struct {
 //
 // Example: vm
 type ServiceType string
+
+// Getter for additional properties for CpuResources. Returns the specified
+// element and whether it was found
+func (a CpuResources) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for CpuResources
+func (a *CpuResources) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for CpuResources to handle AdditionalProperties
+func (a *CpuResources) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["max"]; found {
+		err = json.Unmarshal(raw, &a.Max)
+		if err != nil {
+			return fmt.Errorf("error reading 'max': %w", err)
+		}
+		delete(object, "max")
+	}
+
+	if raw, found := object["min"]; found {
+		err = json.Unmarshal(raw, &a.Min)
+		if err != nil {
+			return fmt.Errorf("error reading 'min': %w", err)
+		}
+		delete(object, "min")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for CpuResources to handle AdditionalProperties
+func (a CpuResources) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["max"], err = json.Marshal(a.Max)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'max': %w", err)
+	}
+
+	object["min"], err = json.Marshal(a.Min)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'min': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for MemoryResources. Returns the specified
+// element and whether it was found
+func (a MemoryResources) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for MemoryResources
+func (a *MemoryResources) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for MemoryResources to handle AdditionalProperties
+func (a *MemoryResources) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["max"]; found {
+		err = json.Unmarshal(raw, &a.Max)
+		if err != nil {
+			return fmt.Errorf("error reading 'max': %w", err)
+		}
+		delete(object, "max")
+	}
+
+	if raw, found := object["min"]; found {
+		err = json.Unmarshal(raw, &a.Min)
+		if err != nil {
+			return fmt.Errorf("error reading 'min': %w", err)
+		}
+		delete(object, "min")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for MemoryResources to handle AdditionalProperties
+func (a MemoryResources) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["max"], err = json.Marshal(a.Max)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'max': %w", err)
+	}
+
+	object["min"], err = json.Marshal(a.Min)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'min': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
