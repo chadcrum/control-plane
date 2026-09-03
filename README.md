@@ -49,7 +49,7 @@ make compose-down     # stop stack and remove volumes
 Compose credentials live in `deploy/.env` (copy from `deploy/.env.example`). Keycloak
 uses the `auth` compose profile — `make compose-up AUTH=true` after uncommenting the auth block
 in `.env`. With providers: `make compose-up-with-providers PROFILES=kubevirt AUTH=true`.
-Subsystem tests use per-suite `.env.example` files under `test/subsystem/*/`.
+Subsystem tests use the shared `test/subsystem/.env.example` file.
 
 Policy evaluation and placement provisioning run in-process in the monolith
 (`EvaluationService`, `PlacementService` via local clients). There is no public
