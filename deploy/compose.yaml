@@ -72,6 +72,7 @@ services:
       DB_NAME: control-plane
       LOG_LEVEL: info
       NATS_URL: "nats://nats:4222"
+      # Compose interpolates this on the host; make compose-up passes --env-file deploy/.env.
       AUTH_DISABLED: ${AUTH_DISABLED:-true}
     ports:
       - "8080:8080"
