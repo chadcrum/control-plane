@@ -19,8 +19,8 @@ make compose-up
 `deploy/.env` holds database credentials and optional auth settings. Lab defaults are in
 `deploy/.env.example`; copy and edit before first start.
 
-`make compose-up` and `docker compose -f deploy/compose.yaml up` are equivalent; the
-Makefile target is a thin wrapper around Compose.
+`make compose-up` and `docker compose --env-file deploy/.env -f deploy/compose.yaml up` are
+equivalent; the Makefile target is a thin wrapper around Compose.
 
 The control-plane API is at `http://localhost:8080`. DCM UI is at `http://localhost:7007`.
 
