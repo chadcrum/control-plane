@@ -8,6 +8,7 @@ services:
       POSTGRESQL_DATABASE: auth_test
       POSTGRESQL_USER: ${POSTGRES_USER:-test_user}
       POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
+      POSTGRESQL_ADMIN_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
     ports:
       - "25432:5432"
     volumes:
@@ -17,6 +18,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # One-shot: creates a second database with no pre-seeded admin actor, used
+  # by control-plane-configa (TC-29) so it doesn't collide with the admin
+  # actor already seeded into auth_test by the main control-plane service.
+  db-init-noadmin:
+    image: quay.io/sclorg/postgresql-16-c9s:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        PGPASSWORD=${POSTGRES_PASSWORD:-test_password} psql -h postgres -U postgres -tc
+        "SELECT 1 FROM pg_database WHERE datname = 'auth_test_noadmin'" | grep -q 1 ||
+        PGPASSWORD=${POSTGRES_PASSWORD:-test_password} psql -h postgres -U postgres -c
+        "CREATE DATABASE auth_test_noadmin OWNER ${POSTGRES_USER:-test_user}"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -45,6 +62,7 @@ services:
     build:
       context: ../../..
       dockerfile: Containerfile
+    image: auth-subsystem-control-plane:latest
     environment:
       BIND_ADDRESS: "0.0.0.0:8080"
       DB_TYPE: pgsql
@@ -68,6 +86,80 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1alpha1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  # TC-13: Config C (proxy-only, no JWT). No AUTH_ISSUER_URL means no
+  # JWTValidator is configured, so Bearer tokens must be ignored and the
+  # proxy-header path used instead. Shares the auth_test DB with the main
+  # `control-plane` service. Admin seeding is check-then-insert (not
+  # concurrency-safe), so this MUST wait for `control-plane` to be healthy
+  # (i.e. past its own seeding, which runs before the HTTP server starts -
+  # see internal/app/run.go) before starting, or both processes can race to
+  # insert the same admin actor and one will crash on the unique constraint.
+  # Reuses the image built by `control-plane` above (same source, different
+  # env) instead of rebuilding, to avoid tripling CI build time.
+  control-plane-configc:
+    image: auth-subsystem-control-plane:latest
+    environment:
+      BIND_ADDRESS: "0.0.0.0:8080"
+      DB_TYPE: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: auth_test
+      DB_USER: ${POSTGRES_USER:-test_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
+      NATS_DISABLED: "true"
+      AUTH_DISABLED: "false"
+      AUTH_PROXY_SECRET: "test-proxy-secret"
+      DCM_ADMIN_SUBJECT: "56deb662-4820-5d83-b828-f4beb11a5fa7"
+      LOG_LEVEL: debug
+    ports:
+      - "28081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      control-plane:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1alpha1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  # TC-29: Config A (auth disabled) with an empty DCM_ADMIN_SUBJECT. Uses its
+  # own database (auth_test_noadmin) so the admin-actor-count assertion isn't
+  # polluted by the admin actor seeded into auth_test by `control-plane`.
+  # Reuses the image built by `control-plane` above instead of rebuilding.
+  # Depends on `control-plane` being healthy (not just started) purely to
+  # guarantee the shared image has finished building - no DB is shared here,
+  # so there is no seeding race like control-plane-configc has.
+  control-plane-configa:
+    image: auth-subsystem-control-plane:latest
+    environment:
+      BIND_ADDRESS: "0.0.0.0:8080"
+      DB_TYPE: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: auth_test_noadmin
+      DB_USER: ${POSTGRES_USER:-test_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
+      NATS_DISABLED: "true"
+      AUTH_DISABLED: "true"
+      DCM_ADMIN_SUBJECT: ""
+      LOG_LEVEL: debug
+    ports:
+      - "28082:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      control-plane:
+        condition: service_healthy
+      db-init-noadmin:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1alpha1/health"]
       interval: 5s
