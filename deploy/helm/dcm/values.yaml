@@ -94,7 +94,7 @@ k8sContainerServiceProvider:
   spName: k8s-container-provider
   namespace: default
   externalSvcType: NodePort
-  kubeconfigRef: ""  # optional; omit for in-cluster ServiceAccount auth with chart RBAC
+  kubeconfigRef: ""  # optional external kubeconfig Secret
 
 acmClusterServiceProvider:
   enabled: false
@@ -106,7 +106,7 @@ acmClusterServiceProvider:
   pullSecretRef: dcm-acm-pull-secret  # pre-created Secret when enabled (see README)
   defaultInfraEnv: ""
   agentNamespace: ""
-  kubeconfigRef: ""  # optional; omit for in-cluster ServiceAccount auth with auto-created RBAC
+  kubeconfigRef: ""  # optional external kubeconfig Secret
 
 threeTierDemoServiceProvider:
   enabled: false
