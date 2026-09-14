@@ -143,8 +143,8 @@ release namespace** with keys `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`,
 `DCM_DEV_USER_PASSWORD`, and `AUTH_PROXY_SECRET`, then set `auth.authSecretRef` (default
 `dcm-auth`). The chart does not render credential Secrets.
 
-> Rotate external Secrets with `kubectl rollout restart` on the Keycloak and
-> control-plane Deployments.
+> **Credential rotation:** `--import-realm` only imports a new realm. Updating
+> `AUTH_PROXY_SECRET` or `DCM_DEV_USER_PASSWORD` and restarting Keycloak does not change credentials already stored in Keycloak. Rotate the corresponding client or user through the Keycloak admin UI/API, then restart the control-plane to load the new Secret.
 
 ### Enable authentication (lab)
 
