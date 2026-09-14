@@ -81,3 +81,28 @@ db_ref_count="$(printf '%s' "$db_ref_out" | grep -c 'name: dcm-db')"
 [ "$db_ref_count" -ge 2 ] || fail "workloads must reference postgres.dbSecretRef (found $db_ref_count)"
 
 require_template_failure "acm without pullSecretRef" "acmClusterServiceProvider.pullSecretRef is required when enabled" --set acmClusterServiceProvider.enabled=true --set acmClusterServiceProvider.pullSecretRef=
+
+require_external_kubeconfig() {
+	local name="$1"
+	local deployment="$2"
+	local env_name="$3"
+	local secret="$4"
+	shift 4
+
+	local out block
+	out="$(helm_out "$@")"
+	block="$(printf '%s' "$out" | awk -v deployment="$deployment" 'BEGIN{RS="---"} index($0, "kind: Deployment") && index($0, "name: dcm-" deployment) {print; exit}')"
+	[ -n "$block" ] || fail "missing $name Deployment"
+	printf '%s' "$block" | grep -Fq -- "- name: $env_name" || fail "$name must set $env_name"
+	printf '%s' "$block" | grep -Fq -- "value: /kubeconfig/kubeconfig" || fail "$name must set the kubeconfig path"
+	printf '%s' "$block" | grep -Fq -- "mountPath: /kubeconfig" || fail "$name must mount the kubeconfig"
+	printf '%s' "$block" | grep -Fq -- "secretName: $secret" || fail "$name must reference Secret $secret"
+	if printf '%s' "$out" | awk -v secret="$secret" 'BEGIN{RS="---"} /kind: Secret/ && index($0, "name: " secret) {found=1} END{exit !found}'; then
+		fail "$name must not render external Secret $secret"
+	fi
+}
+
+require_external_kubeconfig "ACM provider" "acm-cluster-service-provider" "KUBECONFIG" "acm-kubeconfig" --set acmClusterServiceProvider.enabled=true --set acmClusterServiceProvider.pullSecretRef=acm-pull-secret --set acmClusterServiceProvider.kubeconfigRef=acm-kubeconfig
+require_external_kubeconfig "Kubernetes provider" "k8s-container-service-provider" "SP_K8S_KUBECONFIG" "k8s-kubeconfig" --set k8sContainerServiceProvider.enabled=true --set k8sContainerServiceProvider.kubeconfigRef=k8s-kubeconfig
+require_external_kubeconfig "KubeVirt provider" "kubevirt-service-provider" "KUBERNETES_KUBECONFIG" "kubevirt-kubeconfig" --set kubevirtServiceProvider.enabled=true --set kubevirtServiceProvider.kubeconfigRef=kubevirt-kubeconfig
+require_external_kubeconfig "three-tier provider" "three-tier-demo-sp" "SP_K8S_KUBECONFIG" "three-tier-kubeconfig" --set threeTierDemoServiceProvider.enabled=true --set threeTierDemoServiceProvider.kubeconfigRef=three-tier-kubeconfig
