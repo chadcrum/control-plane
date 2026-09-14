@@ -115,7 +115,8 @@
       "additionalProperties": false,
       "properties": {
         "image": {
-          "type": "string"
+          "type": "string",
+          "default": "quay.io/keycloak/keycloak:26.0.1"
         },
         "securityContext": {
           "$ref": "#/definitions/securityContext"
@@ -138,7 +139,8 @@
         },
         "dbSecretRef": {
           "type": "string",
-          "description": "Name of a pre-existing Secret in the release namespace with database credentials."
+          "description": "Name of a pre-existing Secret in the release namespace with database credentials.",
+          "default": "dcm-db"
         },
         "storage": {
           "type": "string"
@@ -206,7 +208,7 @@
         "pullSecretRef": {
           "type": "string",
           "description": "Name of an existing Secret in the release namespace with stringData key pull-secret (base64-encoded .dockerconfigjson).",
-          "default": ""
+          "default": "dcm-acm-pull-secret"
         },
         "defaultInfraEnv": {
           "type": "string"
@@ -266,7 +268,7 @@
         "authSecretRef": {
           "type": "string",
           "description": "Name of a pre-existing Secret in the release namespace with auth credentials.",
-          "default": ""
+          "default": "dcm-auth"
         },
         "jwtAudience": {
           "type": "string",
