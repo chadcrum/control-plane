@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -42,8 +43,8 @@ var _ = BeforeSuite(func() {
 	keycloakURL = envOrDefault("KEYCLOAK_URL", "http://localhost:28180")
 	proxySecret = envOrDefault("AUTH_PROXY_SECRET", "test-proxy-secret")
 	adminSubject = envOrDefault("DCM_ADMIN_SUBJECT", "56deb662-4820-5d83-b828-f4beb11a5fa7")
-	dbConnStr = envOrDefault("DB_CONN_STR", "postgres://test_user:test_password@localhost:25432/auth_test?sslmode=disable")
-	dbNoAdminStr = envOrDefault("DB_NOADMIN_CONN_STR", "postgres://test_user:test_password@localhost:25432/auth_test_noadmin?sslmode=disable")
+	dbConnStr = envOrDefault("DB_CONN_STR", defaultDBConnStr("auth_test"))
+	dbNoAdminStr = envOrDefault("DB_NOADMIN_CONN_STR", defaultDBConnStr("auth_test_noadmin"))
 
 	var err error
 	db, err = sql.Open("pgx", dbConnStr)
@@ -86,4 +87,14 @@ func envOrDefault(key, defaultVal string) string {
 		return v
 	}
 	return defaultVal
+}
+
+func defaultDBConnStr(database string) string {
+	user := envOrDefault("POSTGRESQL_USER", "test_user")
+	pass := envOrDefault("POSTGRESQL_PASSWORD", "test_password")
+	return fmt.Sprintf(
+		"postgres://%s@localhost:25432/%s?sslmode=disable",
+		url.UserPassword(user, pass).String(),
+		database,
+	)
 }

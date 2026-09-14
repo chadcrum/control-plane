@@ -12,7 +12,7 @@
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
-      "secret": "dcm-proxy-secret",
+      "secret": "${AUTH_PROXY_SECRET}",
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
@@ -70,7 +70,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "REPLACE_DCM_DEV_PASSWORD",
+          "value": "${DCM_DEV_USER_PASSWORD}",
           "temporary": false
         }
       ]

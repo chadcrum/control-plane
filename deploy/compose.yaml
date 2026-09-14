@@ -3,36 +3,30 @@
 # Image version: defaults to :main. Pin with CONTROL_PLANE_VERSION in .env.
 # Local dev: `make compose-up` builds control-plane from the repo Containerfile.
 #
-# Credentials: set POSTGRES_USER and POSTGRES_PASSWORD in the environment or in
-# a .env file (see deploy/.env.example). Defaults are for local dev only.
+# Credentials: copy deploy/.env.example to deploy/.env before starting (see deploy/RUN.md).
+# Keycloak uses profile "auth" — pass AUTH=true to make compose-up / compose-up-with-providers.
 
 x-db-common: &db-common
   DB_TYPE: pgsql
   DB_HOST: postgres
   DB_PORT: "5432"
-  DB_USER: ${POSTGRES_USER:-admin}
-  DB_PASS: ${POSTGRES_PASSWORD:-adminpass}
-  DB_PASSWORD: ${POSTGRES_PASSWORD:-adminpass}
 
 x-dcm-registration-url: &dcm-registration-url "http://control-plane:8080/api/v1alpha1"
 
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - "mkdir -p /opt/keycloak/data/import && content=$$(cat /opt/keycloak/data/realm-template.json) && printf '%s' \"$${content//REPLACE_DCM_DEV_PASSWORD/$$DCM_DEV_USER_PASSWORD}\" > /opt/keycloak/data/import/realm-export.json && exec /opt/keycloak/bin/kc.sh start-dev --import-realm"
+    profiles: ["auth"]
+    image: quay.io/keycloak/keycloak:26.0.1
+    command: ["start-dev", "--import-realm"]
+    env_file: .env
     environment:
       KC_HEALTH_ENABLED: "true"
       KC_HOSTNAME: "http://keycloak:8080"
       KC_HOSTNAME_STRICT: "false"
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      DCM_DEV_USER_PASSWORD: ${DCM_DEV_USER_PASSWORD:-admin}
     ports:
       - "8180:8080"
     volumes:
-      - ./keycloak/realm-export.json:/opt/keycloak/data/realm-template.json:ro,z
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro,z
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
       interval: 10s
@@ -42,17 +36,16 @@ services:
 
   postgres:
     image: docker.io/library/postgres:16-alpine
+    env_file: .env
     environment:
       POSTGRES_DB: postgres
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adminpass}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro,z
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -71,17 +64,16 @@ services:
       dockerfile: Containerfile
     image: quay.io/dcm-project/control-plane:${CONTROL_PLANE_VERSION:-main}
     pull_policy: always
+    restart: on-failure
+    env_file: .env
     environment:
       <<: *db-common
       BIND_ADDRESS: ":8080"
       DB_NAME: control-plane
       LOG_LEVEL: info
       NATS_URL: "nats://nats:4222"
-      DCM_ADMIN_SUBJECT: ${DCM_ADMIN_SUBJECT:-56deb662-4820-5d83-b828-f4beb11a5fa7}
+      # Compose interpolates this on the host; make compose-up passes --env-file deploy/.env.
       AUTH_DISABLED: ${AUTH_DISABLED:-true}
-      AUTH_PROXY_SECRET: ${AUTH_PROXY_SECRET:-dcm-dev-proxy-secret}
-      AUTH_ISSUER_URL: ${AUTH_ISSUER_URL:-}
-      AUTH_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE:-}
     ports:
       - "8080:8080"
     depends_on:
@@ -89,8 +81,6 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
-      keycloak:
-        condition: service_healthy
 
   kubevirt-service-provider:
     container_name: ${KUBEVIRT_PROVIDER_NAME:-kubevirt-service-provider}
@@ -136,16 +126,17 @@ services:
     profiles: ["providers", "acm-cluster"]
     image: quay.io/dcm-project/acm-cluster-service-provider:${ACM_CLUSTER_SERVICE_PROVIDER_VERSION:-main}
     pull_policy: always
+    env_file: .env
     environment:
       SP_NAME: ${ACM_CLUSTER_SP_NAME:-acm-cluster-sp}
       SP_ENDPOINT: "http://acm-cluster-service-provider:8080"
       DCM_REGISTRATION_URL: *dcm-registration-url
       SP_NATS_URL: "nats://nats:4222"
       SP_CLUSTER_NAMESPACE: ${ACM_CLUSTER_SP_NAMESPACE:-default}
-      SP_BASE_DOMAIN: ${ACM_CLUSTER_SP_BASE_DOMAIN}
-      SP_PULL_SECRET: ${ACM_CLUSTER_SP_PULL_SECRET}
-      SP_DEFAULT_INFRA_ENV: ${ACM_CLUSTER_SP_DEFAULT_INFRA_ENV}
-      SP_AGENT_NAMESPACE: ${ACM_CLUSTER_SP_AGENT_NAMESPACE}
+      SP_BASE_DOMAIN: ${ACM_CLUSTER_SP_BASE_DOMAIN:-}
+      SP_PULL_SECRET: ${ACM_CLUSTER_SP_PULL_SECRET:-}
+      SP_DEFAULT_INFRA_ENV: ${ACM_CLUSTER_SP_DEFAULT_INFRA_ENV:-}
+      SP_AGENT_NAMESPACE: ${ACM_CLUSTER_SP_AGENT_NAMESPACE:-}
       KUBECONFIG: /kubeconfig
     expose:
       - "8080"
@@ -197,6 +188,7 @@ services:
     profiles: ["providers", "three-tier"]
     image: quay.io/dcm-project/three-tier-app-demo-service-provider:${THREE_TIER_DEMO_SERVICE_PROVIDER_VERSION:-main}
     pull_policy: always
+    env_file: .env
     environment:
       <<: *db-common
       DB_NAME: three-tier-sp
