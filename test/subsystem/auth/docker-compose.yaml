@@ -1,20 +1,17 @@
-# Auth subsystem test stack. Runs with AUTH_DISABLED=false to exercise
-# the full authentication middleware, JIT provisioning, and OIDC flow.
+# Auth subsystem test stack. Shared env: test/subsystem/.env (see .env.example).
 
 services:
   postgres:
     image: quay.io/sclorg/postgresql-16-c9s:latest
+    env_file: ../.env
     environment:
       POSTGRESQL_DATABASE: auth_test
-      POSTGRESQL_USER: ${POSTGRES_USER:-test_user}
-      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
-      POSTGRESQL_ADMIN_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
     ports:
       - "25432:5432"
     volumes:
       - postgres_data:/var/lib/pgsql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-test_user} -d auth_test"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRESQL_USER\" -d auth_test"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,33 +21,30 @@ services:
   # actor already seeded into auth_test by the main control-plane service.
   db-init-noadmin:
     image: quay.io/sclorg/postgresql-16-c9s:latest
+    env_file: ../.env
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >
-        PGPASSWORD=${POSTGRES_PASSWORD:-test_password} psql -h postgres -U postgres -tc
+        PGPASSWORD=$${POSTGRESQL_ADMIN_PASSWORD} psql -h postgres -U postgres -d postgres -tc
         "SELECT 1 FROM pg_database WHERE datname = 'auth_test_noadmin'" | grep -q 1 ||
-        PGPASSWORD=${POSTGRES_PASSWORD:-test_password} psql -h postgres -U postgres -c
-        "CREATE DATABASE auth_test_noadmin OWNER ${POSTGRES_USER:-test_user}"
+        PGPASSWORD=$${POSTGRESQL_ADMIN_PASSWORD} psql -h postgres -U postgres -d postgres -c
+        "CREATE DATABASE auth_test_noadmin OWNER $${POSTGRESQL_USER}"
     depends_on:
       postgres:
         condition: service_healthy
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - "mkdir -p /opt/keycloak/data/import && content=$$(cat /opt/keycloak/data/realm-template.json) && printf '%s' \"$${content//REPLACE_DCM_DEV_PASSWORD/$$DCM_DEV_USER_PASSWORD}\" > /opt/keycloak/data/import/realm-export.json && exec /opt/keycloak/bin/kc.sh start-dev --import-realm"
+    image: quay.io/keycloak/keycloak:26.0.1
+    command: ["start-dev", "--import-realm"]
+    env_file: ../.env
     environment:
       KC_HEALTH_ENABLED: "true"
       KC_HOSTNAME: "http://keycloak:8080"
       KC_HOSTNAME_STRICT: "false"
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      DCM_DEV_USER_PASSWORD: ${DCM_DEV_USER_PASSWORD:-admin}
     ports:
       - "28180:8080"
     volumes:
-      - ../../../deploy/keycloak/realm-export.json:/opt/keycloak/data/realm-template.json:ro,z
+      - ../../../deploy/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro,z
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
       interval: 10s
@@ -63,21 +57,16 @@ services:
       context: ../../..
       dockerfile: Containerfile
     image: auth-subsystem-control-plane:latest
+    env_file: ../.env
     environment:
       BIND_ADDRESS: "0.0.0.0:8080"
       DB_TYPE: pgsql
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: auth_test
-      DB_USER: ${POSTGRES_USER:-test_user}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
       NATS_DISABLED: "true"
       AUTH_DISABLED: "false"
-      AUTH_PROXY_SECRET: "test-proxy-secret"
-      AUTH_ISSUER_URL: "http://keycloak:8080/realms/dcm"
-      AUTH_JWT_AUDIENCE: "dcm-api"
       AUTH_CACHE_TTL: "2s"
-      DCM_ADMIN_SUBJECT: "56deb662-4820-5d83-b828-f4beb11a5fa7"
       LOG_LEVEL: debug
     ports:
       - "28080:8080"
@@ -110,11 +99,11 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: auth_test
-      DB_USER: ${POSTGRES_USER:-test_user}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
+      DB_USER: ${POSTGRESQL_USER:-test_user}
+      DB_PASSWORD: ${POSTGRESQL_PASSWORD:-test_password}
       NATS_DISABLED: "true"
       AUTH_DISABLED: "false"
-      AUTH_PROXY_SECRET: "test-proxy-secret"
+      AUTH_PROXY_SECRET: ${AUTH_PROXY_SECRET:-test-proxy-secret}
       DCM_ADMIN_SUBJECT: "56deb662-4820-5d83-b828-f4beb11a5fa7"
       LOG_LEVEL: debug
     ports:
@@ -145,8 +134,8 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: auth_test_noadmin
-      DB_USER: ${POSTGRES_USER:-test_user}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
+      DB_USER: ${POSTGRESQL_USER:-test_user}
+      DB_PASSWORD: ${POSTGRESQL_PASSWORD:-test_password}
       NATS_DISABLED: "true"
       AUTH_DISABLED: "true"
       DCM_ADMIN_SUBJECT: ""

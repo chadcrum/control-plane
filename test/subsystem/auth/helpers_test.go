@@ -24,8 +24,8 @@ func getKeycloakAdminToken() string {
 	resp, err := httpClient.PostForm(tokenURL, url.Values{
 		"grant_type": {"password"},
 		"client_id":  {"admin-cli"},
-		"username":   {"admin"},
-		"password":   {"admin"},
+		"username":   {envOrDefault("KEYCLOAK_ADMIN", "admin")},
+		"password":   {envOrDefault("KEYCLOAK_ADMIN_PASSWORD", "admin")},
 	})
 	Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
@@ -87,7 +87,7 @@ func getUserToken(username, password string) string {
 	resp, err := httpClient.PostForm(tokenURL, url.Values{
 		"grant_type":    {"password"},
 		"client_id":     {"dcm-proxy"},
-		"client_secret": {"dcm-proxy-secret"},
+		"client_secret": {proxySecret},
 		"username":      {username},
 		"password":      {password},
 	})
@@ -229,7 +229,7 @@ func getServiceAccountToken() string {
 	resp, err := httpClient.PostForm(tokenURL, url.Values{
 		"grant_type":    {"client_credentials"},
 		"client_id":     {"dcm-proxy"},
-		"client_secret": {"dcm-proxy-secret"},
+		"client_secret": {proxySecret},
 	})
 	Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
