@@ -70,8 +70,9 @@ Build locally:
 make image-build
 ```
 
-CI pushes to `quay.io/dcm-project/control-plane` on merges to `main` and
-`release/v*` branches (and on version tags). See
+CI pushes to `quay.io/dcm-project/control-plane` and
+`quay.io/dcm-project/dcm-gitops` (from `Containerfile.gitops`) on merges to
+`main` and `release/v*` branches (and on version tags). See
 [Releasing](https://github.com/dcm-project/shared-workflows#release-flow)
 in shared-workflows for tag behavior and version conventions.
 
