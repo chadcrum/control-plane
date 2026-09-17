@@ -256,11 +256,8 @@ func (s *PlacementService) DeleteRun(ctx context.Context, runID string) error {
 	return s.progressRunDeletion(ctx, runID)
 }
 
-// RehydrateResource re-evaluates an existing resource against current policies
-// and creates a new resource under newRunID. The old resource is deleted after
-// the new one is successfully provisioned.
-// TODO: Rehydrate all resources in the run (e.g. via CreateRun), then delete the
-// old run in reverse DAG order (similar to DeleteRun) instead of migrating run_id.
+// RehydrateResource re-evaluates an existing run against current policies,
+// recreates it under newRunID via CreateRun, and starts old-run teardown via DeleteRun.
 func (s *PlacementService) RehydrateResource(ctx context.Context, runID, newRunID string) (*types.Resource, error) {
 	log := logging.FromContext(ctx)
 	log.Debug("Rehydrating run",
@@ -282,100 +279,161 @@ func (s *PlacementService) RehydrateResource(ctx context.Context, runID, newRunI
 	if len(resources) == 0 {
 		return nil, NewNotFoundError(fmt.Sprintf("run %s not found", runID))
 	}
-	if len(resources) != 1 {
-		return nil, NewValidationError(fmt.Sprintf("rehydrate currently supports only single-resource runs, got %d resources", len(resources)))
-	}
+	return s.rehydrateRun(ctx, runID, newRunID, resources)
+}
 
-	// Step 1: Retrieve the old resource
-	oldResource := resources[0]
-	resourceID := oldResource.ID
-	// Generate UUID for the replacement resource
-	newResourceID := uuid.New().String()
-
-	// Step 2: Re-evaluate the original spec through policy
-	availableAgents, err := s.listAvailableAgents(ctx)
-	if err != nil {
-		log.Error("Failed to list available agents for rehydration", "error", err)
-		return nil, err
-	}
-	log.Debug("Re-evaluating policy for rehydration", "resource_id", resourceID)
-	evaluated, err := s.evaluateResourcePolicy(ctx, resourceID, oldResource.Spec, availableAgents)
-	if err != nil {
-		return nil, err
-	}
-	// Step 3: Create new resource in DB
-	newPath := fmt.Sprintf("resources/%s", newResourceID)
-	newResource := model.Resource{
-		ID:                    newResourceID,
-		RunID:                 newRunID,
-		CatalogItemInstanceId: oldResource.CatalogItemInstanceId,
-		Name:                  oldResource.Name,
-		Spec:                  oldResource.Spec,
-		RequiresResources:     append([]string(nil), oldResource.RequiresResources...),
-		DagLevel:              oldResource.DagLevel,
-		Status:                types.ResourceStatusPending,
-		Path:                  newPath,
-		ApprovalStatus:        &evaluated.Status,
-		AgentName:             &evaluated.SelectedAgent,
-	}
-
-	// Step 3: Create new resource in DB
-	created, err := s.store.Resource().Create(ctx, newResource)
-	if err != nil {
-		if errors.Is(err, store.ErrResourceIdExist) {
-			log.Warn("Duplicate new resource ID during rehydration", "new_resource_id", newResourceID)
-			return nil, NewConflictError(fmt.Sprintf("resource with id %s already exists", newResourceID))
+func catalogItemInstanceIDForRehydrate(runID string, resources model.ResourceList) (string, error) {
+	catalogID := resources[0].CatalogItemInstanceId
+	for _, r := range resources[1:] {
+		if r.CatalogItemInstanceId != catalogID {
+			return "", NewInternalError(fmt.Sprintf(
+				"run %s has inconsistent catalog_item_instance_id values", runID,
+			))
 		}
-		log.Error("Failed to create new resource during rehydration", "new_resource_id", newResourceID, "error", err)
-		return nil, NewInternalError(fmt.Sprintf("failed to create database record for resource %s: %v", newResourceID, err))
+	}
+	return catalogID, nil
+}
+
+func (s *PlacementService) rehydrateRun(ctx context.Context, oldRunID, newRunID string, oldResources model.ResourceList) (*types.Resource, error) {
+	log := logging.FromContext(ctx)
+	catalogID, err := catalogItemInstanceIDForRehydrate(oldRunID, oldResources)
+	if err != nil {
+		return nil, err
 	}
 
-	// Step 4: Provision new resource in SPRM
-	sprmRequest := sprm.CreateResourceRequest{
-		ID:        newResourceID,
-		Spec:      evaluated.EvaluatedSpec,
-		AgentName: evaluated.SelectedAgent,
+	inputs := make([]types.ResourceInput, 0, len(oldResources))
+	for _, r := range oldResources {
+		inputs = append(inputs, types.ResourceInput{
+			Name:              r.Name,
+			Spec:              r.Spec,
+			RequiresResources: append([]string(nil), r.RequiresResources...),
+		})
 	}
-	if _, err = s.sprm.CreateResource(ctx, sprmRequest); err != nil {
-		log.Error("SPRM provisioning failed during rehydration, rolling back", "new_resource_id", newResourceID, "error", err)
-		// Rollback the new DB record
-		if delErr := s.rollbackResourceDelete(newResourceID); delErr != nil {
-			log.Error("Failed to rollback new resource after SPRM error",
-				"new_resource_id", newResourceID,
-				"db_error", delErr,
-				"sprm_error", err,
+
+	created, err := s.CreateRun(ctx, &types.CreateRunRequest{
+		CatalogItemInstanceId: catalogID,
+		RunId:                 newRunID,
+		Resources:             inputs,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	statusBeforeDeleteByID, err := s.loadResourceStatusesByRunID(ctx, oldRunID)
+	if err != nil {
+		s.rollbackProvisioned(resourceIDsFromRun(created.Resources))
+		if rbErr := s.rollbackRunDelete(newRunID); rbErr != nil {
+			log.Error("Failed to rollback new run after old-run status load error",
+				"new_run_id", newRunID,
+				"error", rbErr,
 			)
 		}
-		return nil, handleSPRMError(err)
+		return nil, err
 	}
 
-	// Step 5: Delete old resource from SPRM (deferred - non-blocking)
-	if err := s.sprm.DeleteResourceDeferred(ctx, resourceID); err != nil {
-		log.Error("SPRM deferred deletion failed during rehydration (non-blocking)",
-			"resource_id", resourceID,
+	if err := s.DeleteRun(ctx, oldRunID); err != nil {
+		log.Error("Failed to delete old run after rehydrate create",
+			"old_run_id", oldRunID,
+			"new_run_id", newRunID,
 			"error", err,
 		)
-	}
-	// Step 6: Delete old resource from DB
-	if err := s.store.Resource().Delete(ctx, resourceID); err != nil {
-		log.Error("Failed to delete old resource from DB during rehydration (non-blocking)",
-			"resource_id", resourceID,
-			"error", err,
-		)
+		s.rollbackProvisioned(resourceIDsFromRun(created.Resources))
+		if rbErr := s.rollbackRunDelete(newRunID); rbErr != nil {
+			log.Error("Failed to rollback new run after old-run delete error",
+				"new_run_id", newRunID,
+				"error", rbErr,
+			)
+		}
+		s.rollbackRehydrateOldRunAfterFailedDelete(ctx, oldRunID, statusBeforeDeleteByID)
+		return nil, err
 	}
 
 	log.Info("Run rehydrated successfully",
-		"old_run_id", runID,
+		"old_run_id", oldRunID,
 		"new_run_id", newRunID,
-		"old_resource_id", resourceID,
-		"new_resource_id", newResourceID,
-		"catalog_item_instance_id", oldResource.CatalogItemInstanceId,
-		"agent", evaluated.SelectedAgent,
-		"approval_status", evaluated.Status,
+		"resource_count", len(created.Resources),
+		"catalog_item_instance_id", catalogID,
 	)
 
-	res := storeModelToResource(created)
-	return &res, nil
+	return getDAGRootResource(created.Resources), nil
+}
+
+// getDAGRootResource picks a DAG root resource (lowest DagLevel, tie-break by Name)
+// from a run for the RehydrateResource API return value. Catalog ignores it today.
+func getDAGRootResource(resources []types.Resource) *types.Resource {
+	if len(resources) == 0 {
+		return nil
+	}
+	root := resources[0]
+	for _, r := range resources[1:] {
+		if r.DagLevel < root.DagLevel {
+			root = r
+			continue
+		}
+		if r.DagLevel == root.DagLevel && r.Name < root.Name {
+			root = r
+		}
+	}
+	return &root
+}
+
+func resourceIDsFromRun(resources []types.Resource) []string {
+	ids := make([]string, 0, len(resources))
+	for _, r := range resources {
+		if r.Id != nil {
+			ids = append(ids, *r.Id)
+		}
+	}
+	return ids
+}
+
+func resourceStatusesByID(resources model.ResourceList) map[string]string {
+	statusByID := make(map[string]string, len(resources))
+	for _, r := range resources {
+		statusByID[r.ID] = r.Status
+	}
+	return statusByID
+}
+
+func (s *PlacementService) loadResourceStatusesByRunID(ctx context.Context, runID string) (map[string]string, error) {
+	resources, err := s.store.Resource().ListByRunID(ctx, runID)
+	if err != nil {
+		return nil, NewInternalError(fmt.Sprintf("failed to load run %s resource statuses: %v", runID, err))
+	}
+	return resourceStatusesByID(resources), nil
+}
+
+// rollbackRehydrateOldRunAfterFailedDelete undoes an in-progress DeleteRun when rehydrate
+// fails after the replacement run was created. statusBeforeDeleteByID must come from
+// loadResourceStatusesByRunID immediately before DeleteRun so callbacks during CreateRun are
+// preserved. Only resources still in PENDING_DELETION or DELETING are reverted, never
+// rows already marked DELETED.
+func (s *PlacementService) rollbackRehydrateOldRunAfterFailedDelete(ctx context.Context, oldRunID string, statusBeforeDeleteByID map[string]string) {
+	log := logging.FromContext(ctx)
+	resources, err := s.store.Resource().ListByRunID(ctx, oldRunID)
+	if err != nil {
+		log.Error("Failed to load old run for status rollback after rehydrate delete error",
+			"old_run_id", oldRunID,
+			"error", err,
+		)
+		return
+	}
+	for _, r := range resources {
+		if r.Status != types.ResourceStatusPendingDeletion && r.Status != types.ResourceStatusDeleting {
+			continue
+		}
+		statusBeforeDelete := statusBeforeDeleteByID[r.ID]
+		if statusBeforeDelete == "" {
+			continue
+		}
+		if err := s.store.Resource().UpdateStatus(ctx, r.ID, statusBeforeDelete); err != nil {
+			log.Error("Failed to restore resource status after aborted rehydrate",
+				"resource_id", r.ID,
+				"status", statusBeforeDelete,
+				"error", err,
+			)
+		}
+	}
 }
 
 func (s *PlacementService) rollbackProvisioned(resourceIDs []string) {
@@ -399,12 +457,6 @@ func (s *PlacementService) rollbackRunDelete(runID string) error {
 		return nil
 	}
 	return err
-}
-
-func (s *PlacementService) rollbackResourceDelete(id string) error {
-	rbCtx, cancel := context.WithTimeout(context.Background(), resourceRollbackTimeout)
-	defer cancel()
-	return s.store.Resource().Delete(rbCtx, id)
 }
 
 // ReEvaluateWithExclude re-evaluates placement for an existing resource,
