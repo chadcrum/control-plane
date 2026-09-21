@@ -107,6 +107,21 @@ func NewUnavailableError(message string) *ServiceError {
 	}
 }
 
+// IsCallbackRetryable reports whether a placement callback error should cause
+// the status consumer to NAK the message for redelivery.
+func IsCallbackRetryable(err error) bool {
+	var svcErr *ServiceError
+	if !errors.As(err, &svcErr) {
+		return false
+	}
+	switch svcErr.Code {
+	case ErrCodeInternal, ErrCodeUnavailable, ErrCodeSPRMError, ErrCodePolicyInternalError:
+		return true
+	default:
+		return false
+	}
+}
+
 // IsClientError returns true if err is a ServiceError representing a client-side
 // (4xx) problem. If svcErr is non-nil it is populated with the unwrapped error.
 func IsClientError(err error, svcErr **ServiceError) bool {
@@ -141,8 +156,8 @@ func handlePolicyError(err error) *ServiceError {
 		}
 	}
 
-	// Network or client communication error - not an HTTP error from policy engine
-	return NewPolicyError("policy client communication error: " + err.Error())
+	// Network or client communication error - treat as transient for callback retry.
+	return NewPolicyInternalError("policy client communication error: " + err.Error())
 }
 
 // handleSPRMError maps SPRM client errors to service errors by checking

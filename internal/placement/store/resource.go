@@ -40,6 +40,9 @@ type Resource interface { //nolint:interfacebloat
 	DeleteByRunID(ctx context.Context, runID string) error
 	UpdateRunID(ctx context.Context, oldRunID, newRunID string) error
 	UpdateStatus(ctx context.Context, id, status string) error
+	// UpdateStatusFrom atomically transitions status only when the current
+	// status is one of fromStatuses. Returns whether the update applied.
+	UpdateStatusFrom(ctx context.Context, id string, fromStatuses []string, toStatus string) (bool, error)
 	UpdateStatusByRunID(ctx context.Context, runID, status string) error
 	UpdateAgentName(ctx context.Context, id string, agentName string) error
 	UpdatePlacementDecision(ctx context.Context, id, agentName, approval string) error
@@ -209,6 +212,20 @@ func (s *ResourceStore) UpdateStatus(ctx context.Context, id, status string) err
 		return ErrResourceNotFound
 	}
 	return nil
+}
+
+func (s *ResourceStore) UpdateStatusFrom(ctx context.Context, id string, fromStatuses []string, toStatus string) (bool, error) {
+	// Returns whether the update applied (false when status was not in fromStatuses).
+	if len(fromStatuses) == 0 {
+		return false, nil
+	}
+	result := s.db.WithContext(ctx).Model(&model.Resource{}).
+		Where("id = ? AND status IN ?", id, fromStatuses).
+		Update("status", toStatus)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
 }
 
 func (s *ResourceStore) UpdateStatusByRunID(ctx context.Context, runID, status string) error {

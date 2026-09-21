@@ -451,6 +451,44 @@ var _ = Describe("Resource Store", func() {
 		})
 	})
 
+	Describe("UpdateStatusFrom", func() {
+		It("transitions status only when current status matches", func() {
+			agent := "test-agent"
+			approval := "APPROVED"
+			id := uuid.New().String()
+			_, err := requestStore.Create(ctx, model.Resource{
+				ID:                    id,
+				RunID:                 "run-cas-1",
+				Name:                  "app",
+				CatalogItemInstanceId: "cat-1",
+				Spec:                  map[string]any{},
+				AgentName:             &agent,
+				ApprovalStatus:        &approval,
+				Path:                  "resources/" + id,
+				Status:                "PENDING",
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			applied, err := requestStore.UpdateStatusFrom(ctx, id, []string{"PENDING"}, "PROVISIONING")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(applied).To(BeTrue())
+
+			updated, err := requestStore.Get(ctx, id)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updated.Status).To(Equal("PROVISIONING"))
+
+			applied, err = requestStore.UpdateStatusFrom(ctx, id, []string{"PENDING"}, "RUNNING")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(applied).To(BeFalse())
+		})
+
+		It("returns false without error when fromStatuses is empty", func() {
+			applied, err := requestStore.UpdateStatusFrom(ctx, uuid.New().String(), nil, "RUNNING")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(applied).To(BeFalse())
+		})
+	})
+
 	Describe("UpdatePlacementDecision", func() {
 		It("updates agent and approval for a resource", func() {
 			agent := "old-agent"

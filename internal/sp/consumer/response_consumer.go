@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agentstore "github.com/dcm-project/control-plane/internal/agent/store/agent"
+	placementservice "github.com/dcm-project/control-plane/internal/placement/service"
 	"github.com/dcm-project/control-plane/internal/sp/messaging"
 	"github.com/dcm-project/control-plane/internal/sp/store"
 	"github.com/dcm-project/control-plane/internal/sp/store/model"
@@ -269,66 +270,76 @@ func (c *ResponseConsumer) handleRequestQueued(ctx context.Context, data eventDa
 // the same event serves both delete paths: non-deferred deletes are
 // hard-deleted now (nothing else is keeping them around); deferred deletes
 // are soft-completed to keep their tombstone. Any other combination is a
-// late/duplicate redelivery and a no-op, so it can't erase an
-// already-finalized tombstone.
+// late/duplicate redelivery and a no-op for SP, but placement progression
+// is still invoked so a prior placement callback failure can retry.
 func (c *ResponseConsumer) handleDeletionAcknowledged(ctx context.Context, data eventData, msg jetstream.Msg) {
 	stiStore := c.store.ServiceTypeInstance()
-	deletionFinalized := false
 
 	instance, err := stiStore.Get(ctx, data.ResourceID, true)
 	if err != nil {
 		if errors.Is(err, rmstore.ErrInstanceNotFound) {
-			slog.Info("deletion-acknowledged: instance already gone, acking", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName)
-			_ = msg.Ack()
+			slog.Info("deletion-acknowledged: instance already gone, continuing to placement",
+				"instance_id", data.ResourceID,
+				"event_type", messaging.CETypeDeletionAcknowledged,
+				"agent_name", data.AgentName,
+			)
+		} else {
+			slog.Error("deletion-acknowledged: failed to look up instance, nacking", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "error", err)
+			_ = msg.NakWithDelay(5 * time.Second)
 			return
 		}
-		slog.Error("deletion-acknowledged: failed to look up instance, nacking", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "error", err)
-		_ = msg.NakWithDelay(5 * time.Second)
-		return
-	}
-
-	switch {
-	case instance.Status == model.StatusDeleting:
-		// Checked ahead of DeletionStatus: a non-deferred delete must
-		// always be fully removed once acknowledged, regardless of whether
-		// its best-effort MarkForDeletion enrollment also set SCHEDULED.
-		if err := stiStore.HardDeleteFromAgent(ctx, data.ResourceID, data.AgentName); err != nil {
-			if !errors.Is(err, rmstore.ErrInstanceNotFound) {
-				slog.Error("deletion-acknowledged: failed to hard-delete instance, nacking", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "error", err)
-				_ = msg.NakWithDelay(5 * time.Second)
-				return
-			}
-			slog.Info("deletion-acknowledged: instance already gone or agent mismatch, acking",
-				"instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName)
-		} else {
-			slog.Info("deletion-acknowledged: instance hard-deleted", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "status", "DELETED")
-			deletionFinalized = true
-		}
-	case instance.Status == model.StatusPendingDeletion,
-		instance.DeletionStatus != nil && *instance.DeletionStatus == rmstore.DeletionStatusScheduled:
-		// Status=pending_deletion is matched even without deletion_status
-		// set, so a cancel-rejected retry whose own MarkForDeletion
-		// enrollment failed doesn't fall through to the default case and
-		// get stranded as "stale".
-		if err := stiStore.MarkDeletionCompleteFromAgent(ctx, data.ResourceID, data.AgentName); err != nil {
-			if errors.Is(err, rmstore.ErrInstanceNotFound) {
-				slog.Info("deletion-acknowledged: instance already gone or agent mismatch, acking",
+	} else {
+		switch {
+		case instance.Status == model.StatusDeleting:
+			// Checked ahead of DeletionStatus: a non-deferred delete must
+			// always be fully removed once acknowledged, regardless of whether
+			// its best-effort MarkForDeletion enrollment also set SCHEDULED.
+			if err := stiStore.HardDeleteFromAgent(ctx, data.ResourceID, data.AgentName); err != nil {
+				if !errors.Is(err, rmstore.ErrInstanceNotFound) {
+					slog.Error("deletion-acknowledged: failed to hard-delete instance, nacking", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "error", err)
+					_ = msg.NakWithDelay(5 * time.Second)
+					return
+				}
+				slog.Info("deletion-acknowledged: instance already gone or agent mismatch, continuing to placement",
 					"instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName)
 			} else {
-				slog.Error("deletion-acknowledged: failed to mark deferred deletion complete, nacking", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "error", err)
+				slog.Info("deletion-acknowledged: instance hard-deleted", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "status", "DELETED")
+			}
+		case instance.Status == model.StatusPendingDeletion,
+			instance.DeletionStatus != nil && *instance.DeletionStatus == rmstore.DeletionStatusScheduled:
+			// Status=pending_deletion is matched even without deletion_status
+			// set, so a cancel-rejected retry whose own MarkForDeletion
+			// enrollment failed doesn't fall through to the default case and
+			// get stranded as "stale".
+			if err := stiStore.MarkDeletionCompleteFromAgent(ctx, data.ResourceID, data.AgentName); err != nil {
+				if errors.Is(err, rmstore.ErrInstanceNotFound) {
+					slog.Info("deletion-acknowledged: instance already gone or agent mismatch, continuing to placement",
+						"instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName)
+				} else {
+					slog.Error("deletion-acknowledged: failed to mark deferred deletion complete, nacking", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "error", err)
+					_ = msg.NakWithDelay(5 * time.Second)
+					return
+				}
+			} else {
+				slog.Info("deletion-acknowledged: deferred deletion marked complete", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "status", "DELETED")
+			}
+		default:
+			slog.Info("deletion-acknowledged: SP deletion already finalized or instance was never deleting, continuing to placement",
+				"instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "status", instance.Status, "deletion_status", instance.DeletionStatus)
+		}
+	}
+
+	if c.onDeleted != nil {
+		if err := c.onDeleted(ctx, data.ResourceID); err != nil {
+			if placementservice.IsCallbackRetryable(err) {
+				slog.Warn("deletion-acknowledged: placement OnResourceDeleted callback failed with retryable error, nacking",
+					"instance_id", data.ResourceID,
+					"event_type", messaging.CETypeDeletionAcknowledged,
+					"error", err,
+				)
 				_ = msg.NakWithDelay(5 * time.Second)
 				return
 			}
-		} else {
-			slog.Info("deletion-acknowledged: deferred deletion marked complete", "instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "status", "DELETED")
-			deletionFinalized = true
-		}
-	default:
-		slog.Info("deletion-acknowledged: deletion already finalized or instance was never deleting, ignoring stale/duplicate ack",
-			"instance_id", data.ResourceID, "event_type", messaging.CETypeDeletionAcknowledged, "agent_name", data.AgentName, "status", instance.Status, "deletion_status", instance.DeletionStatus)
-	}
-	if deletionFinalized && c.onDeleted != nil {
-		if err := c.onDeleted(ctx, data.ResourceID); err != nil {
 			slog.Error("deletion-acknowledged: placement OnResourceDeleted callback failed",
 				"instance_id", data.ResourceID,
 				"event_type", messaging.CETypeDeletionAcknowledged,

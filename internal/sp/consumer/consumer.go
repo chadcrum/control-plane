@@ -12,6 +12,7 @@ import (
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2/event"
+	placementservice "github.com/dcm-project/control-plane/internal/placement/service"
 	placementtypes "github.com/dcm-project/control-plane/internal/placement/types"
 	"github.com/dcm-project/control-plane/internal/sp/store"
 	rmstore "github.com/dcm-project/control-plane/internal/sp/store/resource_manager"
@@ -20,6 +21,9 @@ import (
 )
 
 const healthFlushTimeout = 2 * time.Second
+
+// defaultStatusMaxDeliver caps redelivery when placement callbacks keep failing.
+const defaultStatusMaxDeliver = 10
 
 // StatusEvent represents a status event payload.
 type StatusEvent struct {
@@ -117,8 +121,9 @@ func (c *StatusConsumer) Start(ctx context.Context) error {
 	}
 
 	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:   c.consumerName,
-		AckPolicy: jetstream.AckExplicitPolicy,
+		Durable:    c.consumerName,
+		AckPolicy:  jetstream.AckExplicitPolicy,
+		MaxDeliver: defaultStatusMaxDeliver,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create/update consumer %s: %w", c.consumerName, err)
@@ -234,18 +239,36 @@ func (c *StatusConsumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 				Status:     normalizedStatus,
 				OutputSpec: payload.OutputSpec,
 			}); err != nil {
+				if placementservice.IsCallbackRetryable(err) {
+					slog.Warn("Placement OnResourceRunning failed with retryable error, nacking",
+						"instance_id", payload.Id, "error", err)
+					_ = msg.NakWithDelay(5 * time.Second)
+					return
+				}
 				slog.Error("Placement OnResourceRunning failed", "instance_id", payload.Id, "error", err)
 			}
 		}
 	case placementtypes.ResourceStatusDeleted:
 		if c.onDeleted != nil {
 			if err := c.onDeleted(ctx, payload.Id); err != nil {
+				if placementservice.IsCallbackRetryable(err) {
+					slog.Warn("Placement OnResourceDeleted failed with retryable error, nacking",
+						"instance_id", payload.Id, "error", err)
+					_ = msg.NakWithDelay(5 * time.Second)
+					return
+				}
 				slog.Error("Placement OnResourceDeleted failed", "instance_id", payload.Id, "error", err)
 			}
 		}
 	case placementtypes.ResourceStatusFailed:
 		if c.onFailed != nil {
 			if err := c.onFailed(ctx, payload.Id); err != nil {
+				if placementservice.IsCallbackRetryable(err) {
+					slog.Warn("Placement OnResourceFailed failed with retryable error, nacking",
+						"instance_id", payload.Id, "error", err)
+					_ = msg.NakWithDelay(5 * time.Second)
+					return
+				}
 				slog.Error("Placement OnResourceFailed failed", "instance_id", payload.Id, "error", err)
 			}
 		}
