@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"time"
 
 	catalogv1alpha1 "github.com/dcm-project/control-plane/api/catalog/v1alpha1"
@@ -32,6 +33,14 @@ func NewReconciler(gitopsStore store.Store, catalogSvc catalogservice.CatalogIte
 
 // gitOperationTimeout is the maximum time allowed for git clone/fetch operations.
 const gitOperationTimeout = 2 * time.Minute
+
+// User-value path for labels; avoids overwriting metadata.name.
+const gitopsLabelsFieldPath = "metadata.labels"
+
+const (
+	gitopsRepositoryLabel = "gitops.dcm.io/repository"
+	gitopsCommitLabel     = "gitops.dcm.io/commit"
+)
 
 // Reconcile performs a single reconciliation cycle for the given GitRepository.
 func (r *Reconciler) Reconcile(ctx context.Context, repo model.GitRepository) error {
@@ -163,31 +172,47 @@ func (r *Reconciler) createInstance(ctx context.Context, repoID, latestCommit st
 	if err != nil {
 		return fmt.Errorf("get catalog item %s: %w", desired.CatalogItemID, err)
 	}
+	if catalogItem.Spec == nil {
+		return fmt.Errorf("catalog item %s has no spec", desired.CatalogItemID)
+	}
 
-	// Merge gitops labels with user-defined labels from YAML metadata
-	mergedLabels := map[string]string{
-		"gitops.dcm.io/repository": repoID,
-		"gitops.dcm.io/commit":     latestCommit,
+	// Desired labels first
+	desiredAndGitopsLabels := maps.Clone(desired.Labels)
+	if desiredAndGitopsLabels == nil {
+		desiredAndGitopsLabels = map[string]string{}
 	}
-	for k, v := range desired.Labels {
-		mergedLabels[k] = v
-	}
-	labelValue := map[string]interface{}{
-		"labels": mergedLabels,
-	}
+	// Append GitOps labels
+	desiredAndGitopsLabels[gitopsRepositoryLabel] = repoID
+	desiredAndGitopsLabels[gitopsCommitLabel] = latestCommit
 
 	// Inject labels for every resource in the catalog item
 	var userValues []catalogv1alpha1.UserValue
+	knownResources := make(map[string]bool, len(catalogItem.Spec.Resources))
 	for _, resource := range catalogItem.Spec.Resources {
+		// One metadata.labels per resource: user_values labels + desiredAndGitopsLabels.
+		mergedLabels, err := mergeResourceLabels(resource.Name, desired.UserValues, desiredAndGitopsLabels)
+		if err != nil {
+			return fmt.Errorf("instance %s: %w", desired.Name, err)
+		}
 		userValues = append(userValues, catalogv1alpha1.UserValue{
 			Resource: resource.Name,
-			Path:     "metadata",
-			Value:    labelValue,
+			Path:     gitopsLabelsFieldPath,
+			Value:    mergedLabels,
 		})
+		knownResources[resource.Name] = true
 	}
 
 	// Append the user's original values
 	for _, uv := range desired.UserValues {
+		if uv.Resource == "" {
+			return fmt.Errorf("instance %s: %w", desired.Name, catalogservice.ErrUserValueResourceRequired)
+		}
+		if !knownResources[uv.Resource] {
+			return fmt.Errorf("instance %s: %w: %s", desired.Name, catalogservice.ErrUserValueResourceNotFound, uv.Resource)
+		}
+		if isMetadataLabelsPath(uv.Path) {
+			continue
+		}
 		userValues = append(userValues, catalogv1alpha1.UserValue{
 			Resource: uv.Resource,
 			Path:     uv.Path,
@@ -208,6 +233,47 @@ func (r *Reconciler) createInstance(ctx context.Context, repoID, latestCommit st
 
 	_, err = r.catalogSvc.Create(ctx, req)
 	return err
+}
+
+func mergeResourceLabels(resourceName string, userValues []DesiredUserValue, desiredAndGitopsLabels map[string]string) (map[string]string, error) {
+	mergedLabels := map[string]string{}
+	for _, uv := range userValues {
+		if uv.Resource != resourceName || !isMetadataLabelsPath(uv.Path) {
+			continue
+		}
+		labels, err := labelMapFromUserValue(uv.Value)
+		if err != nil {
+			return nil, fmt.Errorf("resource %s %s: %w", resourceName, gitopsLabelsFieldPath, err)
+		}
+		maps.Copy(mergedLabels, labels)
+	}
+	maps.Copy(mergedLabels, desiredAndGitopsLabels)
+	return mergedLabels, nil
+}
+
+// labelMapFromUserValue coerces YAML-unmarshaled label maps into map[string]string.
+// Only used for metadata.labels.
+func labelMapFromUserValue(v any) (map[string]string, error) {
+	switch m := v.(type) {
+	case map[string]string:
+		return m, nil
+	case map[string]any:
+		labels := make(map[string]string, len(m))
+		for k, val := range m {
+			s, ok := val.(string)
+			if !ok {
+				return nil, fmt.Errorf("label %q must be a string, got %T", k, val)
+			}
+			labels[k] = s
+		}
+		return labels, nil
+	default:
+		return nil, fmt.Errorf("value must be a map of strings, got %T", v)
+	}
+}
+
+func isMetadataLabelsPath(path string) bool {
+	return path == gitopsLabelsFieldPath
 }
 
 func (r *Reconciler) setSynced(ctx context.Context, repoID, commit string) {
