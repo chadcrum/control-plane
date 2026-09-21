@@ -62,7 +62,10 @@ Usage: {{ include "dcm.waitForPostgres" . | nindent 8 }}
 {{- define "dcm.waitForPostgres" -}}
 - name: wait-for-postgres
   image: {{ .Values.postgres.image }}
-  command: ["sh", "-c", "until pg_isready -h {{ include "dcm.fullname" . }}-postgres -p 5432 -U {{ .Values.postgres.user }}; do echo 'Waiting for postgres...'; sleep 2; done"]
+  envFrom:
+    - secretRef:
+        name: {{ include "dcm.dbSecretName" . }}
+  command: ["sh", "-c", "until pg_isready -h {{ include "dcm.fullname" . }}-postgres -p 5432 -U \"$POSTGRES_USER\"; do echo 'Waiting for postgres...'; sleep 2; done"]
   securityContext:
     runAsNonRoot: true
     allowPrivilegeEscalation: false
@@ -75,14 +78,23 @@ Usage: {{ include "dcm.waitForPostgres" . | nindent 8 }}
 
 
 {{/*
-Auth credentials Secret name: pre-existing Secret or chart-managed {fullname}-auth.
+Database credentials Secret name (pre-created in release namespace).
+*/}}
+{{- define "dcm.dbSecretName" -}}
+{{- if not .Values.postgres.dbSecretRef -}}
+{{- fail "postgres.dbSecretRef is required" -}}
+{{- end -}}
+{{- .Values.postgres.dbSecretRef -}}
+{{- end }}
+
+{{/*
+Auth credentials Secret name (pre-created in release namespace).
 */}}
 {{- define "dcm.authSecretName" -}}
-{{- if .Values.auth.authSecretRef -}}
-{{- .Values.auth.authSecretRef -}}
-{{- else -}}
-{{- printf "%s-auth" (include "dcm.fullname" .) -}}
+{{- if not .Values.auth.authSecretRef -}}
+{{- fail "auth.authSecretRef is required when auth.enabled=true" -}}
 {{- end -}}
+{{- .Values.auth.authSecretRef -}}
 {{- end }}
 
 {{/*

@@ -1,16 +1,4 @@
 {{- if .Values.kubevirtServiceProvider.enabled }}
-{{- if .Values.kubevirtServiceProvider.kubeconfig }}
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ include "dcm.fullname" . }}-kubevirt-kubeconfig
-  labels:
-    {{- include "dcm.labels" . | nindent 4 }}
-type: Opaque
-data:
-  kubeconfig: {{ .Values.kubevirtServiceProvider.kubeconfig | b64enc | quote }}
----
-{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,20 +30,20 @@ spec:
               value: "http://{{ include "dcm.fullname" . }}-kubevirt-service-provider:8081/api/v1alpha1/vms"
             - name: KUBERNETES_NAMESPACE
               value: {{ .Values.kubevirtServiceProvider.namespace | quote }}
-            {{- if .Values.kubevirtServiceProvider.kubeconfig }}
+            {{- if .Values.kubevirtServiceProvider.kubeconfigRef }}
             - name: KUBERNETES_KUBECONFIG
               value: /kubeconfig/kubeconfig
             {{- end }}
-          {{- if .Values.kubevirtServiceProvider.kubeconfig }}
+          {{- if .Values.kubevirtServiceProvider.kubeconfigRef }}
           volumeMounts:
             - name: kubeconfig
               mountPath: /kubeconfig
               readOnly: true
           {{- end }}
-      {{- if .Values.kubevirtServiceProvider.kubeconfig }}
+      {{- if .Values.kubevirtServiceProvider.kubeconfigRef }}
       volumes:
         - name: kubeconfig
           secret:
-            secretName: {{ include "dcm.fullname" . }}-kubevirt-kubeconfig
+            secretName: {{ .Values.kubevirtServiceProvider.kubeconfigRef }}
       {{- end }}
 {{- end }}

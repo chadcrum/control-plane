@@ -1,8 +1,8 @@
 {{- if .Values.acmClusterServiceProvider.enabled }}
-{{- if not (or .Values.acmClusterServiceProvider.pullSecret .Values.acmClusterServiceProvider.pullSecretRef) }}
-  {{- fail "acmClusterServiceProvider.pullSecret or acmClusterServiceProvider.pullSecretRef is required (base64-encoded .dockerconfigjson); the referenced Secret must store the value via stringData so the SP receives it base64-encoded" }}
+{{- if not .Values.acmClusterServiceProvider.pullSecretRef }}
+  {{- fail "acmClusterServiceProvider.pullSecretRef is required when enabled (pre-created Secret with stringData key pull-secret)" }}
 {{- end }}
-{{- if not (or .Values.acmClusterServiceProvider.kubeconfig .Values.acmClusterServiceProvider.kubeconfigRef) }}
+{{- if not .Values.acmClusterServiceProvider.kubeconfigRef }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -76,29 +76,6 @@ subjects:
     name: {{ include "dcm.fullname" . }}-acm-cluster-sp
     namespace: {{ .Release.Namespace }}
 ---
-{{- else if .Values.acmClusterServiceProvider.kubeconfig }}
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ include "dcm.fullname" . }}-acm-cluster-kubeconfig
-  labels:
-    {{- include "dcm.labels" . | nindent 4 }}
-type: Opaque
-data:
-  kubeconfig: {{ .Values.acmClusterServiceProvider.kubeconfig | b64enc | quote }}
----
-{{- end }}
-{{- if .Values.acmClusterServiceProvider.pullSecret }}
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ include "dcm.fullname" . }}-acm-cluster-pull-secret
-  labels:
-    {{- include "dcm.labels" . | nindent 4 }}
-type: Opaque
-stringData:
-  pull-secret: {{ .Values.acmClusterServiceProvider.pullSecret | quote }}
----
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -117,7 +94,7 @@ spec:
       labels:
         {{- include "dcm.selectorLabels" (dict "context" . "component" "acm-cluster-service-provider") | nindent 8 }}
     spec:
-      {{- if not (or .Values.acmClusterServiceProvider.kubeconfig .Values.acmClusterServiceProvider.kubeconfigRef) }}
+      {{- if not .Values.acmClusterServiceProvider.kubeconfigRef }}
       serviceAccountName: {{ include "dcm.fullname" . }}-acm-cluster-sp
       {{- end }}
       containers:
@@ -144,13 +121,8 @@ spec:
             - name: SP_PULL_SECRET
               valueFrom:
                 secretKeyRef:
-                  {{- if .Values.acmClusterServiceProvider.pullSecret }}
-                  name: {{ include "dcm.fullname" . }}-acm-cluster-pull-secret
-                  key: pull-secret
-                  {{- else }}
                   name: {{ .Values.acmClusterServiceProvider.pullSecretRef }}
                   key: pull-secret
-                  {{- end }}
             {{- if .Values.acmClusterServiceProvider.defaultInfraEnv }}
             - name: SP_DEFAULT_INFRA_ENV
               value: {{ .Values.acmClusterServiceProvider.defaultInfraEnv | quote }}
@@ -159,25 +131,21 @@ spec:
             - name: SP_AGENT_NAMESPACE
               value: {{ .Values.acmClusterServiceProvider.agentNamespace | quote }}
             {{- end }}
-            {{- if or .Values.acmClusterServiceProvider.kubeconfig .Values.acmClusterServiceProvider.kubeconfigRef }}
+            {{- if .Values.acmClusterServiceProvider.kubeconfigRef }}
             - name: KUBECONFIG
               value: /kubeconfig/kubeconfig
             {{- end }}
-          {{- if or .Values.acmClusterServiceProvider.kubeconfig .Values.acmClusterServiceProvider.kubeconfigRef }}
+          {{- if .Values.acmClusterServiceProvider.kubeconfigRef }}
           volumeMounts:
             - name: kubeconfig
               mountPath: /kubeconfig
               readOnly: true
           {{- end }}
-      {{- if or .Values.acmClusterServiceProvider.kubeconfig .Values.acmClusterServiceProvider.kubeconfigRef }}
+      {{- if .Values.acmClusterServiceProvider.kubeconfigRef }}
       volumes:
         - name: kubeconfig
           secret:
-            {{- if .Values.acmClusterServiceProvider.kubeconfig }}
-            secretName: {{ include "dcm.fullname" . }}-acm-cluster-kubeconfig
-            {{- else }}
             secretName: {{ .Values.acmClusterServiceProvider.kubeconfigRef }}
-            {{- end }}
       {{- end }}
 ---
 apiVersion: v1

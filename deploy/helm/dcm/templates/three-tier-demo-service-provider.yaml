@@ -1,16 +1,4 @@
 {{- if .Values.threeTierDemoServiceProvider.enabled }}
-{{- if .Values.threeTierDemoServiceProvider.kubeconfig }}
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ include "dcm.fullname" . }}-three-tier-kubeconfig
-  labels:
-    {{- include "dcm.labels" . | nindent 4 }}
-type: Opaque
-data:
-  kubeconfig: {{ .Values.threeTierDemoServiceProvider.kubeconfig | b64enc | quote }}
----
-{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -38,7 +26,7 @@ spec:
               protocol: TCP
           envFrom:
             - secretRef:
-                name: {{ include "dcm.fullname" . }}-db
+                name: {{ include "dcm.dbSecretName" . }}
           env:
             - name: DB_TYPE
               value: pgsql
@@ -60,21 +48,21 @@ spec:
               value: "nats://{{ include "dcm.fullname" . }}-nats:4222"
             - name: SP_K8S_NAMESPACE
               value: {{ .Values.threeTierDemoServiceProvider.namespace | quote }}
-            {{- if .Values.threeTierDemoServiceProvider.kubeconfig }}
+            {{- if .Values.threeTierDemoServiceProvider.kubeconfigRef }}
             - name: SP_K8S_KUBECONFIG
               value: /kubeconfig/kubeconfig
             {{- end }}
-          {{- if .Values.threeTierDemoServiceProvider.kubeconfig }}
+          {{- if .Values.threeTierDemoServiceProvider.kubeconfigRef }}
           volumeMounts:
             - name: kubeconfig
               mountPath: /kubeconfig
               readOnly: true
           {{- end }}
-      {{- if .Values.threeTierDemoServiceProvider.kubeconfig }}
+      {{- if .Values.threeTierDemoServiceProvider.kubeconfigRef }}
       volumes:
         - name: kubeconfig
           secret:
-            secretName: {{ include "dcm.fullname" . }}-three-tier-kubeconfig
+            secretName: {{ .Values.threeTierDemoServiceProvider.kubeconfigRef }}
       {{- end }}
 ---
 apiVersion: v1

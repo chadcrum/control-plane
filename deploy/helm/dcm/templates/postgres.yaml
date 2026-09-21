@@ -35,7 +35,7 @@ spec:
               protocol: TCP
           envFrom:
             - secretRef:
-                name: {{ include "dcm.fullname" . }}-db
+                name: {{ include "dcm.dbSecretName" . }}
           env:
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
@@ -44,11 +44,9 @@ spec:
           readinessProbe:
             exec:
               command:
-                - pg_isready
-                - -U
-                - {{ .Values.postgres.user | quote }}
-                - -d
-                - postgres
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d postgres
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 5
@@ -56,11 +54,9 @@ spec:
           livenessProbe:
             exec:
               command:
-                - pg_isready
-                - -U
-                - {{ .Values.postgres.user | quote }}
-                - -d
-                - postgres
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d postgres
             initialDelaySeconds: 15
             periodSeconds: 10
           volumeMounts:
