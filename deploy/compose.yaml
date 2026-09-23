@@ -4,7 +4,7 @@
 # Local dev: `make compose-up` builds control-plane from the repo Containerfile.
 #
 # Credentials: copy deploy/.env.example to deploy/.env before starting (see deploy/RUN.md).
-# Keycloak uses profile "auth" — pass AUTH=true to make compose-up / compose-up-with-providers.
+# Keycloak uses profile "auth" — pass AUTH=true to make compose-up / compose-up-with-agent.
 
 x-db-common: &db-common
   DB_TYPE: pgsql
@@ -81,96 +81,8 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
-
-  kubevirt-service-provider:
-    container_name: ${KUBEVIRT_PROVIDER_NAME:-kubevirt-service-provider}
-    profiles: ["providers", "kubevirt"]
-    image: quay.io/dcm-project/kubevirt-service-provider:${KUBEVIRT_SERVICE_PROVIDER_VERSION:-main}
-    pull_policy: always
-    environment:
-      NATS_URL: "nats://nats:4222"
-      SERVICE_MANAGER_ENDPOINT: *dcm-registration-url
-      PROVIDER_NAME: ${KUBEVIRT_PROVIDER_NAME:-kubevirt-service-provider}
-      PROVIDER_ENDPOINT: "http://${KUBEVIRT_PROVIDER_NAME:-kubevirt-service-provider}:8081/api/v1alpha1/vms"
-      KUBERNETES_NAMESPACE: ${KUBERNETES_NAMESPACE:-default}
-      KUBERNETES_KUBECONFIG: /kubeconfig
-    volumes:
-      - ${KUBEVIRT_KUBECONFIG:-~/.kube/config}:/kubeconfig:ro,z
-    depends_on:
-      control-plane:
-        condition: service_started
-
-  k8s-container-service-provider:
-    profiles: ["providers", "k8s-container", "three-tier"]
-    image: quay.io/dcm-project/k8s-container-service-provider:${K8S_CONTAINER_SERVICE_PROVIDER_VERSION:-main}
-    pull_policy: always
-    environment:
-      SP_NAME: ${K8S_CONTAINER_SP_NAME:-k8s-container-provider}
-      SP_ENDPOINT: "http://k8s-container-service-provider:8080"
-      DCM_REGISTRATION_URL: *dcm-registration-url
-      SP_NATS_URL: "nats://nats:4222"
-      SP_K8S_NAMESPACE: ${K8S_CONTAINER_SP_NAMESPACE:-default}
-      SP_K8S_KUBECONFIG: /kubeconfig
-      SP_K8S_EXTERNAL_SVC_TYPE: ${K8S_CONTAINER_SP_EXTERNAL_SVC_TYPE:-NodePort}
-    expose:
-      - "8080"
-    volumes:
-      - ${K8S_CONTAINER_SP_KUBECONFIG:-~/.kube/config}:/kubeconfig:ro,z
-    depends_on:
-      control-plane:
-        condition: service_started
-      nats:
-        condition: service_started
-
-  acm-cluster-service-provider:
-    profiles: ["providers", "acm-cluster"]
-    image: quay.io/dcm-project/acm-cluster-service-provider:${ACM_CLUSTER_SERVICE_PROVIDER_VERSION:-main}
-    pull_policy: always
-    env_file: .env
-    environment:
-      SP_NAME: ${ACM_CLUSTER_SP_NAME:-acm-cluster-sp}
-      SP_ENDPOINT: "http://acm-cluster-service-provider:8080"
-      DCM_REGISTRATION_URL: *dcm-registration-url
-      SP_NATS_URL: "nats://nats:4222"
-      SP_CLUSTER_NAMESPACE: ${ACM_CLUSTER_SP_NAMESPACE:-default}
-      SP_BASE_DOMAIN: ${ACM_CLUSTER_SP_BASE_DOMAIN:-}
-      SP_PULL_SECRET: ${ACM_CLUSTER_SP_PULL_SECRET:-}
-      SP_DEFAULT_INFRA_ENV: ${ACM_CLUSTER_SP_DEFAULT_INFRA_ENV:-}
-      SP_AGENT_NAMESPACE: ${ACM_CLUSTER_SP_AGENT_NAMESPACE:-}
-      KUBECONFIG: /kubeconfig
-    expose:
-      - "8080"
-    volumes:
-      - ${ACM_CLUSTER_SP_KUBECONFIG:-~/.kube/config}:/kubeconfig:ro,z
-    depends_on:
-      control-plane:
-        condition: service_started
-      nats:
-        condition: service_started
-
-  k8s-storage-service-provider:
-    profiles: ["providers", "storage"]
-    image: quay.io/dcm-project/k8s-storage-service-provider:${K8S_STORAGE_SERVICE_PROVIDER_VERSION:-main}
-    pull_policy: always
-    environment:
-      SP_NAME: ${K8S_STORAGE_SP_NAME:-k8s-storage-provider}
-      SP_ENDPOINT: "http://k8s-storage-service-provider:8080"
-      SP_SERVER_ADDRESS: ":8080"
-      DCM_REGISTRATION_URL: *dcm-registration-url
-      SP_NATS_URL: "nats://nats:4222"
-      SP_K8S_NAMESPACE: ${K8S_STORAGE_SP_NAMESPACE:-default}
-      SP_K8S_KUBECONFIG: /kubeconfig
-      SP_K8S_DEFAULT_STORAGE_CLASS: ${K8S_STORAGE_SP_DEFAULT_STORAGE_CLASS:-}
-      SP_K8S_DEFAULT_ACCESS_MODE: ${K8S_STORAGE_SP_DEFAULT_ACCESS_MODE:-ReadWriteOnce}
-    expose:
-      - "8080"
-    volumes:
-      - ${K8S_STORAGE_SP_KUBECONFIG:-~/.kube/config}:/kubeconfig:ro,z
-    depends_on:
-      control-plane:
-        condition: service_started
-      nats:
-        condition: service_started
+      keycloak:
+        condition: service_healthy
 
   dcm-ui:
     image: quay.io/dcm-project/dcm-ui:${DCM_UI_VERSION:-main}
@@ -184,35 +96,42 @@ services:
       control-plane:
         condition: service_started
 
-  three-tier-demo-service-provider:
-    profiles: ["providers", "three-tier"]
-    image: quay.io/dcm-project/three-tier-app-demo-service-provider:${THREE_TIER_DEMO_SERVICE_PROVIDER_VERSION:-main}
+  environment-agent:
+    profiles: ["environment-agent"]
+    image: quay.io/dcm-project/environment-agent:${ENVIRONMENT_AGENT_VERSION:-main}
     pull_policy: always
     env_file: .env
     environment:
-      <<: *db-common
-      DB_NAME: three-tier-sp
-      CONTAINER_SP_URL: "http://k8s-container-service-provider:8080"
-      SP_NAME: ${THREE_TIER_SP_NAME:-three-tier-provider}
-      SP_ENDPOINT: "http://three-tier-demo-service-provider:8080"
-      DCM_REGISTRATION_URL: *dcm-registration-url
-      SP_NATS_URL: "nats://nats:4222"
-      SP_K8S_NAMESPACE: ${K8S_CONTAINER_SP_NAMESPACE:-default}
-      SP_K8S_KUBECONFIG: /kubeconfig
-    expose:
-      - "8080"
+      AGENT_NAME: ${AGENT_NAME:-local-agent}
+      AGENT_ENVIRONMENT: ${AGENT_ENVIRONMENT:-dev}
+      AGENT_COST: ${AGENT_COST:-low}
+      # Base URL only — the agent appends /api/v1alpha1/agents for registration.
+      DCM_REGISTRATION_URL: http://control-plane:8080
+      AGENT_MESSAGING_URL: nats://nats:4222
+      AGENT_EMBEDDED_SPS: ${AGENT_EMBEDDED_SPS:-}
+      SP_DEFAULT_KUBECONFIG: /kubeconfig
+      SP_CONTAINER_NAMESPACE: ${SP_CONTAINER_NAMESPACE:-default}
+      SP_K8S_EXTERNAL_SVC_TYPE: ${SP_K8S_EXTERNAL_SVC_TYPE:-NodePort}
+      SP_VM_NAMESPACE: ${SP_VM_NAMESPACE:-default}
+      SP_CLUSTER_NAMESPACE: ${SP_CLUSTER_NAMESPACE:-}
+      SP_PULL_SECRET: ${SP_PULL_SECRET:-}
+      SP_BASE_DOMAIN: ${SP_BASE_DOMAIN:-}
+      SP_STORAGE_NAMESPACE: ${SP_STORAGE_NAMESPACE:-default}
+      SP_K8S_DEFAULT_STORAGE_CLASS: ${SP_K8S_DEFAULT_STORAGE_CLASS:-}
+      SP_K8S_DEFAULT_ACCESS_MODE: ${SP_K8S_DEFAULT_ACCESS_MODE:-ReadWriteOnce}
+      AGENT_SP_PERSISTENCE_PATH: /app/data/registrations.json
+    ports:
+      - "${AGENT_PORT:-8081}:8080"
     volumes:
-      - ${K8S_CONTAINER_SP_KUBECONFIG:-~/.kube/config}:/kubeconfig:ro,z
+      - ${AGENT_KUBECONFIG_HOST:-~/.kube/config}:/kubeconfig:ro,z
+      - environment_agent_data:/app/data
     depends_on:
       control-plane:
         condition: service_started
       nats:
         condition: service_started
-      k8s-container-service-provider:
-        condition: service_started
-      postgres:
-        condition: service_healthy
 
 volumes:
   postgres_data: {}
   nats_data: {}
+  environment_agent_data: {}
