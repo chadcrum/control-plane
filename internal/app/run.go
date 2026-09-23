@@ -54,8 +54,6 @@ import (
 	spstore "github.com/dcm-project/control-plane/internal/sp/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 )
 
 const gracefulShutdownTimeout = 5 * time.Second
@@ -115,26 +113,16 @@ func Run() int {
 	var publisher *messaging.Publisher
 	checkers := []Checker{NewPostgresChecker(db)}
 
-	var agentJS jetstream.JetStream
+	var agentConn *messaging.Connection
 	if !cfg.NATS.Disabled {
-		agentNc, err := nats.Connect(cfg.NATS.URL, nats.MaxReconnects(-1))
+		var err error
+		agentConn, err = messaging.Connect(ctx, cfg.NATS.URL)
 		if err != nil {
-			slog.Error("Failed to connect to NATS for agent response consumer", "error", err)
+			slog.Error("Failed to initialize agent messaging", "error", err)
 			return 1
 		}
-		defer agentNc.Close()
-		agentJS, err = jetstream.New(agentNc)
-		if err != nil {
-			slog.Error("Failed to create JetStream for agent response consumer", "error", err)
-			return 1
-		}
-
-		publisher = messaging.NewPublisher(agentJS)
-
-		if err := publisher.EnsureStream(ctx); err != nil {
-			slog.Error("Failed to ensure agent request stream", "error", err)
-			return 1
-		}
+		defer agentConn.Close()
+		publisher = agentConn.Publisher
 	}
 
 	policyClient := placementpolicy.NewServiceClient(evaluationService)
@@ -145,9 +133,9 @@ func Run() int {
 		placementservice.WithAgentClient(agentClient),
 	)
 
-	if !cfg.NATS.Disabled {
+	if agentConn != nil {
 		responseConsumer := spconsumer.NewResponseConsumer(
-			agentJS,
+			agentConn.JetStream,
 			spDataStore,
 			agentSt,
 			cfg.Agent.ResponseMaxDeliver,

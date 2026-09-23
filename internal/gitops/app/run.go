@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	agentstore "github.com/dcm-project/control-plane/internal/agent/store/agent"
 	catalogconfig "github.com/dcm-project/control-plane/internal/catalog/config"
 	catalogplacement "github.com/dcm-project/control-plane/internal/catalog/placement"
 	catalogservice "github.com/dcm-project/control-plane/internal/catalog/service"
@@ -19,6 +20,7 @@ import (
 	"github.com/dcm-project/control-plane/internal/gitops/controller"
 	gitopsstore "github.com/dcm-project/control-plane/internal/gitops/store"
 	gitopsmodel "github.com/dcm-project/control-plane/internal/gitops/store/model"
+	placementagent "github.com/dcm-project/control-plane/internal/placement/agent"
 	placementpolicy "github.com/dcm-project/control-plane/internal/placement/policy"
 	placementservice "github.com/dcm-project/control-plane/internal/placement/service"
 	placementsprm "github.com/dcm-project/control-plane/internal/placement/sprm"
@@ -26,6 +28,7 @@ import (
 	policyopa "github.com/dcm-project/control-plane/internal/policy/opa"
 	policyservice "github.com/dcm-project/control-plane/internal/policy/service"
 	policystore "github.com/dcm-project/control-plane/internal/policy/store"
+	"github.com/dcm-project/control-plane/internal/sp/messaging"
 	sprmsvc "github.com/dcm-project/control-plane/internal/sp/service/resource_manager"
 	spstore "github.com/dcm-project/control-plane/internal/sp/store"
 	"gorm.io/driver/postgres"
@@ -51,6 +54,8 @@ func Run() int {
 		"db_name", cfg.Database.Name,
 		"git_work_dir", cfg.GitWorkDir,
 		"poll_interval", cfg.PollInterval,
+		"nats_disabled", cfg.NATS.Disabled,
+		"nats_url", cfg.NATS.URL,
 	)
 
 	db, err := openDB(cfg)
@@ -76,6 +81,8 @@ func Run() int {
 	policyDataStore := policystore.NewStore(db)
 	placementDataStore := placementstore.NewStore(db)
 	spDataStore := spstore.NewStore(db)
+	agentSt := agentstore.NewAgent(db)
+	agentClient := placementagent.NewServiceClient(agentSt)
 
 	// Build catalog service (same wiring as dcm-server)
 	opaEngine := policyopa.NewEngine()
@@ -86,10 +93,27 @@ func Run() int {
 		return 1
 	}
 
-	spInstanceSvc := sprmsvc.NewInstanceService(spDataStore, nil, nil)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	var publisher *messaging.Publisher
+	if !cfg.NATS.Disabled {
+		agentConn, err := messaging.Connect(ctx, cfg.NATS.URL)
+		if err != nil {
+			slog.Error("Failed to initialize agent messaging", "error", err)
+			return 1
+		}
+		defer agentConn.Close()
+		publisher = agentConn.Publisher
+	}
+
+	spInstanceSvc := sprmsvc.NewInstanceService(spDataStore, publisher, agentSt)
 	policyClient := placementpolicy.NewServiceClient(evaluationSvc)
 	sprmClient := placementsprm.NewServiceClient(spInstanceSvc)
-	placementSvc := placementservice.NewPlacementService(placementDataStore, policyClient, sprmClient)
+	placementSvc := placementservice.NewPlacementService(
+		placementDataStore, policyClient, sprmClient,
+		placementservice.WithAgentClient(agentClient),
+	)
 
 	pmClient := catalogplacement.NewLocalClient(placementSvc, slogLogger)
 
@@ -106,9 +130,6 @@ func Run() int {
 	// Create and start controller
 	pollInterval := time.Duration(cfg.PollInterval) * time.Second
 	ctrl := controller.NewController(reconciler, gitopsDataStore, pollInterval)
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 
 	ctrl.Start(ctx)
 	defer ctrl.Stop()

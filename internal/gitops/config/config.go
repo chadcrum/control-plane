@@ -10,6 +10,7 @@ import (
 // Config holds configuration for the dcm-gitops process.
 type Config struct {
 	Database   DatabaseConfig
+	NATS       NATSConfig
 	LogLevel   string `envconfig:"LOG_LEVEL" default:"info"`
 	GitWorkDir string `envconfig:"GIT_WORK_DIR" default:"/tmp/dcm-gitops"`
 	// PollInterval is how often (in seconds) the controller reloads the list of repos from the DB.
@@ -24,6 +25,13 @@ type DatabaseConfig struct {
 	Name     string `envconfig:"DB_NAME" default:"control-plane"`
 	User     string `envconfig:"DB_USER"`
 	Password string `envconfig:"DB_PASSWORD"`
+}
+
+// NATSConfig holds NATS settings used to publish agent create requests.
+// Response/status consumption stays on the control-plane process.
+type NATSConfig struct {
+	URL      string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
+	Disabled bool   `envconfig:"NATS_DISABLED" default:"false"`
 }
 
 // LoadConfig reads configuration from environment variables.
